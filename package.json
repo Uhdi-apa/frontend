@@ -25,6 +25,7 @@
     "@react-aria/ssr": "3.9.8",
     "@react-aria/visually-hidden": "3.8.22",
     "@react-google-maps/api": "^2.20.6",
+    "axios": "^1.9.0",
     "clsx": "2.1.1",
     "framer-motion": "11.13.1",
     "intl-messageformat": "^10.5.0",
