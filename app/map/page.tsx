@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
+import { useSearchParams } from 'next/navigation'; // useSearchParams 훅 추가
 
 // 지도 컨테이너 스타일
 const containerStyle = {
@@ -29,6 +30,8 @@ interface Hospital {
 }
 
 export default function Map() {
+  const searchParams = useSearchParams(); // URL 쿼리 파라미터 가져오기
+  
   // 상단 기본 진술
   const [defaultStatement, setDefaultStatement] = useState<string>("");
   // 하단 병원 리스트
@@ -68,33 +71,59 @@ export default function Map() {
   // 위치가 설정되면 백엔드로 요청하여 데이터 로드
   useEffect(() => {
     if (!currentPosition) return;
+    
     const fetchData = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        // URL 파라미터에서 가져온 symptom 값 사용
+        const symptomText = searchParams.get("symptom") || "증상 정보 없음";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+        
+        console.log('API 요청 시작:', `${API_URL}/api/hospitals`);
+        console.log('요청 데이터:', {
+          symptom: symptomText,
+          location: {
+            latitude: currentPosition.lat,
+            longitude: currentPosition.lng,
+          },
+        });
+        
         const res = await fetch(`${API_URL}/api/hospitals`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            // CORS 문제 해결을 위한 헤더 추가
+            "Access-Control-Allow-Origin": "*" 
+          },
           body: JSON.stringify({
-            symptom: "가슴 통증",
+            symptom: symptomText,
             location: {
               latitude: currentPosition.lat,
               longitude: currentPosition.lng,
             },
           }),
         });
+        
+        if (!res.ok) {
+          // 응답이 성공적이지 않은 경우 오류 처리
+          const errorText = await res.text();
+          throw new Error(`API 응답 오류 (${res.status}): ${errorText}`);
+        }
+        
         const data = await res.json();
-        // 상단 기본 진술
+        console.log('API 응답 데이터:', data);
+        
         setDefaultStatement(data.defaultStatement || data.first_aid_guideline || "");
-        // 병원 리스트
         setHospitals(data.matched_hospitals || []);
-        // 응급 가이드
         setFirstAidGuideline(data.first_aid_guideline || "");
       } catch (err) {
-        console.error("Error fetching hospital data:", err);
+        console.error("병원 데이터 가져오기 오류:", err);
+        // UI에 오류 메시지 표시 (선택 사항)
+        setDefaultStatement("데이터를 불러오는데 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
     };
+    
     fetchData();
-  }, [currentPosition]);
+  }, [currentPosition, searchParams]);
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
