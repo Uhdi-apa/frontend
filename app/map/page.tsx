@@ -70,7 +70,8 @@ export default function Map() {
     if (!currentPosition) return;
     const fetchData = async () => {
       try {
-        const res = await fetch("/api/hospitals", {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/hospitals`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -99,7 +100,7 @@ export default function Map() {
     <div className="fixed inset-0 flex flex-col overflow-hidden">
       {/* 지도 영역 */}
       <div className="absolute inset-0 z-0">
-        <LoadScript googleMapsApiKey="AIzaSyB7RIJvUZduw2og9PaFX20-3AV6dmMerhA">
+        <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB7RIJvUZduw2og9PaFX20-3AV6dmMerhA"}>
           {currentPosition ? (
             <GoogleMap
               mapContainerStyle={containerStyle}

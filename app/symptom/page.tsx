@@ -21,7 +21,8 @@ export default function Symptom() {
     // 다음 페이지로 이동하는 함수
     const handleNextClick = () => {
         if (isValid) {
-            router.push('/map'); // 다음 페이지 경로
+            // URL 파라미터로 증상 정보를 전달
+            router.push(`/map?symptom=${encodeURIComponent(symptom.trim())}`);
         }
     };
 
