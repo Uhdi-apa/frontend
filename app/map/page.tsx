@@ -100,14 +100,6 @@ export default function Map() {
           )}
         </LoadScript>
       </div>
-
-      {/* 내 위치로 이동 버튼 */}
-      <button
-        onClick={handleGetLocation}
-        className="fixed bottom-5 right-5 bg-blue-600 text-white px-4 py-2 rounded shadow-lg z-20"
-      >
-        내 위치로 이동
-      </button>
     </>
   );
 }
