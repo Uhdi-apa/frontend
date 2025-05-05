@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
-import { useSearchParams } from 'next/navigation'; // useSearchParams 훅 추가
+import { useSearchParams } from 'next/navigation';
 
 // 지도 컨테이너 스타일
 const containerStyle = {
@@ -18,7 +18,7 @@ const defaultCenter = {
   lng: 126.9780,
 };
 
-// 병원 정보 타입 정의
+// 하단 리스트용 병원 타입
 interface Hospital {
   hospital_id: number;
   name: string;
@@ -29,19 +29,35 @@ interface Hospital {
   is_emergency: boolean;
 }
 
+// 모달에 표시할 병원 상세 정보 타입
+interface HospitalDetail {
+  hospitalId: number;
+  hospitalName: string;
+  operatingHours: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  distance: number;
+  isEmergencyRoom: boolean;
+  specialties: string[];
+  phoneNumber: string;
+  hospitalImage: string;
+}
+
 export default function Map() {
-  const searchParams = useSearchParams(); // URL 쿼리 파라미터 가져오기
-  
-  // 상단 기본 진술
+  const searchParams = useSearchParams();
+
+  // 기존 상태들…
   const [defaultStatement, setDefaultStatement] = useState<string>("");
-  // 하단 병원 리스트
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  // 하단 응급가이드
   const [firstAidGuideline, setFirstAidGuideline] = useState<string>("");
-  // 사용자 위치
   const [currentPosition, setCurrentPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const watchIdRef = useRef<number | null>(null);
+
+  // **추가된 상태: 모달 오픈 여부 & 상세 정보 저장**
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedHospitalDetail, setSelectedHospitalDetail] = useState<HospitalDetail | null>(null);
 
   // 위치 업데이트 핸들러
   const updatePosition = (position: GeolocationPosition) => {
@@ -50,10 +66,10 @@ export default function Map() {
       lng: position.coords.longitude,
     };
     setCurrentPosition(pos);
-    if (mapRef.current) mapRef.current.panTo(pos);
+    mapRef.current?.panTo(pos);
   };
 
-  // 최초 위치 가져오기 및 워치 시작
+  // 초기 위치 조회 및 watch
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(updatePosition);
@@ -68,31 +84,19 @@ export default function Map() {
     };
   }, []);
 
-  // 위치가 설정되면 백엔드로 요청하여 데이터 로드
+  // 병원 리스트 로드 (기존)
   useEffect(() => {
     if (!currentPosition) return;
-    
     const fetchData = async () => {
       try {
-        // URL 파라미터에서 가져온 symptom 값 사용
         const symptomText = searchParams.get("symptom") || "증상 정보 없음";
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        
-        console.log('API 요청 시작:', `${API_URL}/api/hospitals`);
-        console.log('요청 데이터:', {
-          symptom: symptomText,
-          location: {
-            latitude: currentPosition.lat,
-            longitude: currentPosition.lng,
-          },
-        });
-        
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
         const res = await fetch(`${API_URL}/api/hospitals`, {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
-            // CORS 문제 해결을 위한 헤더 추가
-            "Access-Control-Allow-Origin": "*" 
+            "Access-Control-Allow-Origin": "*",
           },
           body: JSON.stringify({
             symptom: symptomText,
@@ -102,28 +106,47 @@ export default function Map() {
             },
           }),
         });
-        
-        if (!res.ok) {
-          // 응답이 성공적이지 않은 경우 오류 처리
-          const errorText = await res.text();
-          throw new Error(`API 응답 오류 (${res.status}): ${errorText}`);
-        }
-        
+        if (!res.ok) throw new Error(`API 오류 ${res.status}`);
         const data = await res.json();
-        console.log('API 응답 데이터:', data);
-        
         setDefaultStatement(data.defaultStatement || data.first_aid_guideline || "");
         setHospitals(data.matched_hospitals || []);
         setFirstAidGuideline(data.first_aid_guideline || "");
       } catch (err) {
-        console.error("병원 데이터 가져오기 오류:", err);
-        // UI에 오류 메시지 표시 (선택 사항)
-        setDefaultStatement("데이터를 불러오는데 실패했습니다. 잠시 후 다시 시도해주세요.");
+        console.error(err);
+        setDefaultStatement("데이터를 불러오는데 실패했습니다.");
       }
     };
-    
     fetchData();
   }, [currentPosition, searchParams]);
+
+  // **추가된 함수: 개별 병원 클릭 시 상세 정보 요청 및 모달 오픈**
+  const handleHospitalClick = async (h: Hospital) => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const res = await fetch(`${API_URL}/api/hospital/details`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({
+          hospital_id: h.hospital_id,
+          location: {
+            latitude: h.location.latitude,
+            longitude: h.location.longitude,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`상세정보 호출 실패 ${res.status}`);
+      const json = await res.json();
+      // 응답 구조: { message: "...", data: { …HospitalDetail } }
+      setSelectedHospitalDetail(json.data);
+      setIsModalOpen(true);
+    } catch (err) {
+      console.error("상세정보 로드 오류:", err);
+      // 필요 시 사용자 알림 추가
+    }
+  };
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
@@ -148,7 +171,7 @@ export default function Map() {
       </div>
 
       {/* 상단 아코디언 */}
-      <div className="w-full transition-all duration-300 z-10 relative">
+      <div className="w-full z-10 relative">
         <Accordion variant="shadow" className="bg-white rounded-b-2xl shadow-xl overflow-hidden">
           <AccordionItem
             key="defaultStatement"
@@ -173,7 +196,11 @@ export default function Map() {
       <div className="relative h-[320px] bg-white rounded-t-2xl overflow-y-auto z-10">
         {hospitals.map((h) => (
           <div key={h.hospital_id} className="flex pt-6 items-center justify-center">
-            <Button radius="none" className="bg-white border-b-1.5 flex h-[72px] w-full items-center justify-center">
+            <Button
+              radius="none"
+              className="bg-white border-b-1.5 flex h-[72px] w-full items-center justify-center"
+              onPress={() => handleHospitalClick(h)}  // 클릭 핸들러 연결
+            >
               <div className="flex flex-col w-full gap-2 items-center justify-center">
                 <div className="flex w-[315px] items-center justify-between">
                   <span className="font-bold text-2xl">{h.name}</span>
@@ -193,6 +220,29 @@ export default function Map() {
           </div>
         )}
       </div>
+
+      {/* **추가된 모달** */}
+      {isModalOpen && selectedHospitalDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white rounded-2xl p-6 w-80 max-w-full shadow-lg">
+            <h2 className="text-xl font-bold mb-4">{selectedHospitalDetail.hospitalName}</h2>
+            <img
+              src={selectedHospitalDetail.hospitalImage}
+              alt={selectedHospitalDetail.hospitalName}
+              className="w-full h-40 object-cover rounded-md mb-4"
+            />
+            <p><strong>주소:</strong> {selectedHospitalDetail.address}</p>
+            <p><strong>운영시간:</strong> {selectedHospitalDetail.operatingHours}</p>
+            <p><strong>전화번호:</strong> {selectedHospitalDetail.phoneNumber}</p>
+            <p><strong>거리:</strong> {selectedHospitalDetail.distance?.toFixed(2)}km</p>
+            <p><strong>응급실 여부:</strong> {selectedHospitalDetail.isEmergencyRoom ? "O" : "X"}</p>
+            <p><strong>전문 진료과:</strong> {selectedHospitalDetail.specialties.join(", ")}</p>
+            <div className="mt-4 flex justify-end">
+              <Button onPress={() => setIsModalOpen(false)}>닫기</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
