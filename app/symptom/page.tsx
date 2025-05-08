@@ -75,6 +75,7 @@ export default function Symptom() {
       }
 
       const result = await response.json();
+
       console.log("백엔드 응답:", result);
 
       router.push(`/map?symptom=${encodeURIComponent(symptom.trim())}`);
