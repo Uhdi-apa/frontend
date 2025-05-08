@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -84,19 +85,18 @@ export default function Map() {
     };
   }, []);
 
-  // 병원 리스트 로드 (기존)
+  // 병원 리스트 로드 (수정됨)
   useEffect(() => {
     if (!currentPosition) return;
     const fetchData = async () => {
       try {
         const symptomText = searchParams.get("symptom") || "증상 정보 없음";
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
 
-        const res = await fetch(`${API_URL}/api/hospitals`, {
+        const res = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
           },
           body: JSON.stringify({
             symptom: symptomText,
@@ -119,15 +119,14 @@ export default function Map() {
     fetchData();
   }, [currentPosition, searchParams]);
 
-  // **추가된 함수: 개별 병원 클릭 시 상세 정보 요청 및 모달 오픈**
+  // 병원 상세 정보 요청 함수 (수정됨)
   const handleHospitalClick = async (h: Hospital) => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const res = await fetch(`${API_URL}/api/hospital/details`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
+      const res = await fetch(`${API_URL}/hospitals/detail`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
         },
         body: JSON.stringify({
           hospital_id: h.hospital_id,

@@ -1,8 +1,9 @@
+/* eslint-disable prettier/prettier */
 "use client";
-import {useState, useEffect} from "react";
-import {Input} from "@heroui/input";
-import {Button} from "@heroui/button";
-import {useRouter} from "next/navigation";
+import { useState, useEffect } from "react";
+import { Input } from "@heroui/input";
+import { Button } from "@heroui/button";
+import { useRouter } from "next/navigation";
 
 export default function Age() {
     const router = useRouter();
@@ -29,7 +30,7 @@ export default function Age() {
         <>
             <div className="pt-32">
                 <p className="flex font-bold text-2xl">연령을 기입해주세요.</p>
-                <p className="flex font-normal text-sm pt-2">정확한 나이를 기입해야 사용자가 방문 가능한 병원을<br/>알려줄 수 있어요.</p>
+                <p className="flex font-normal text-sm pt-2">정확한 나이를 기입해야 사용자가 방문 가능한 병원을 알려줄 수 있어요.</p>
             </div>
             <div className="pt-16">
                 <div className="flex items-center">
