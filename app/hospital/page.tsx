@@ -59,6 +59,8 @@ export default function Map() {
   // **추가된 상태: 모달 오픈 여부 & 상세 정보 저장**
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState<HospitalDetail | null>(null);
+  // **추가된 상태: 클릭한 병원 정보 (InfoWindow용)**
+  const [activeMarker, setActiveMarker] = useState<Hospital | null>(null);
 
   // 위치 업데이트 핸들러
   const updatePosition = (position: GeolocationPosition) => {
@@ -158,8 +160,24 @@ export default function Map() {
               center={currentPosition}
               zoom={15}
               onLoad={(map) => { mapRef.current = map; }}
+              onClick={() => setActiveMarker(null)} // 맵 클릭 시 InfoWindow 닫기
             >
+              {/* 현재 위치 마커 */}
               <Marker position={currentPosition} />
+
+              {/* 병원 위치 마커들 */}
+              {hospitals.map((hospital) => (
+                <Marker
+                  key={hospital.hospital_id}
+                  position={{ lat: hospital.location.latitude, lng: hospital.location.longitude }}
+                  onClick={() => {
+                    // 마커 클릭 시 해당 병원 정보로 activeMarker 상태 업데이트
+                    // InfoWindow를 사용하거나, 하단 리스트의 항목을 하이라이트하는 등의 인터랙션 가능
+                    // 여기서는 간단히 handleHospitalClick을 호출하여 모달을 띄우도록 함
+                    handleHospitalClick(hospital);
+                  }}
+                />
+              ))}
             </GoogleMap>
           ) : (
             <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-500">
