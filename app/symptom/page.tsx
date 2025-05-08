@@ -78,7 +78,7 @@ export default function Symptom() {
 
       console.log("백엔드 응답:", result);
 
-      router.push(`/map?symptom=${encodeURIComponent(symptom.trim())}`);
+      router.push(`/hospital?symptom=${encodeURIComponent(symptom.trim())}`);
     } catch (error) {
       console.error("증상 전송 실패:", error);
       alert(`증상 전송에 실패했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`);

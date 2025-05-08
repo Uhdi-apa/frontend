@@ -82,6 +82,7 @@ export default function Map() {
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
     }
+
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
@@ -92,6 +93,7 @@ export default function Map() {
     if (!currentPosition) return;
     const fetchData = async () => {
       try {
+        // URL에서 symptom 파라미터 가져오기
         const symptomText = searchParams.get("symptom") || "증상 정보 없음";
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
 
@@ -101,18 +103,19 @@ export default function Map() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            symptom: symptomText,
-            location: {
-              latitude: currentPosition.lat,
-              longitude: currentPosition.lng,
-            },
+            prompt: symptomText, // 가져온 symptomText 사용
+            latitude: currentPosition.lat,
+            longitude: currentPosition.lng,
           }),
         });
+
         if (!res.ok) throw new Error(`API 오류 ${res.status}`);
         const data = await res.json();
+        
         setDefaultStatement(data.defaultStatement || data.first_aid_guideline || "");
         setHospitals(data.matched_hospitals || []);
         setFirstAidGuideline(data.first_aid_guideline || "");
+
       } catch (err) {
         console.error(err);
         setDefaultStatement("데이터를 불러오는데 실패했습니다.");
@@ -126,7 +129,7 @@ export default function Map() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
       const res = await fetch(`${API_URL}/hospitals/detail`, {
-        method: "POST",
+        method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
