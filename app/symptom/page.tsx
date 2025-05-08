@@ -56,32 +56,35 @@ export default function Symptom() {
     }
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
+      // 서버 통신 로직 제거
+      // const API_URL = "http://43.200.107.7:8080";
 
-      const response = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: symptom.trim(),
-          latitude: currentPosition.latitude,
-          longitude: currentPosition.longitude,
-        }),
-      });
+      // const response = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     prompt: symptom.trim(),
+      //     latitude: currentPosition.latitude,
+      //     longitude: currentPosition.longitude,
+      //   }),
+      // });
 
-      if (!response.ok) {
-        throw new Error(`서버 응답 오류: ${response.status}`);
-      }
+      // if (!response.ok) {
+      //   throw new Error(`서버 응답 오류: ${response.status}`);
+      // }
 
-      const result = await response.json();
+      // const result = await response.json();
 
-      console.log("백엔드 응답:", result);
+      // console.log("백엔드 응답:", result);
 
+      // 증상 정보를 hospital 페이지로 전달
       router.push(`/hospital?symptom=${encodeURIComponent(symptom.trim())}`);
     } catch (error) {
-      console.error("증상 전송 실패:", error);
-      alert(`증상 전송에 실패했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
+      // 에러 처리 로직은 유지 (예: 라우팅 실패 등 예상치 못한 오류)
+      console.error("페이지 이동 실패:", error);
+      alert(`페이지 이동에 실패했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
     }
   };
 

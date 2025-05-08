@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
+import { GoogleMap, LoadScript, MarkerF } from "@react-google-maps/api";
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
 import { useSearchParams } from 'next/navigation';
@@ -49,12 +49,12 @@ export default function Map() {
   const searchParams = useSearchParams();
 
   // 기존 상태들…
-  const [defaultStatement, setDefaultStatement] = useState<string>("");
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [firstAidGuideline, setFirstAidGuideline] = useState<string>("");
   const [currentPosition, setCurrentPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const [symptom, setSymptom] = useState<string>("");
 
   // **추가된 상태: 모달 오픈 여부 & 상세 정보 저장**
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,30 +95,50 @@ export default function Map() {
       try {
         // URL에서 symptom 파라미터 가져오기
         const symptomText = searchParams.get("symptom") || "증상 정보 없음";
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
+        const API_URL = "http://43.200.107.7:8080";
 
-        const res = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
+        const response = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            prompt: symptomText, // 가져온 symptomText 사용
+            prompt: symptomText,
             latitude: currentPosition.lat,
             longitude: currentPosition.lng,
           }),
         });
 
-        if (!res.ok) throw new Error(`API 오류 ${res.status}`);
-        const data = await res.json();
-        
-        setDefaultStatement(data.defaultStatement || data.first_aid_guideline || "");
-        setHospitals(data.matched_hospitals || []);
-        setFirstAidGuideline(data.first_aid_guideline || "");
+        if (!response.ok) {
+          throw new Error(`서버 응답 오류: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        console.log("백엔드 응답:", result);
+
+        setSymptom(symptomText); // symptom 상태 업데이트
+
+        // 서버 응답 데이터를 프론트엔드 Hospital 인터페이스에 맞게 매핑
+        let mappedHospitals = result.data.hospitals ? result.data.hospitals.map((hospital: any) => ({
+          hospital_id: hospital.hospitalId,
+          name: hospital.hospitalName,
+          location: { latitude: hospital.latitude, longitude: hospital.longitude },
+          distance: hospital.distance, // distance는 서버 응답에 이미 있음
+          phone_number: hospital.phoneNumber,
+          operating_hours: hospital.operatingHour, // 서버는 operatingHour, 프론트는 operating_hours
+          is_emergency: hospital.isEmergency,
+        })) : [];
+
+        // 거리가 가까운 순으로 정렬 (오름차순)
+        mappedHospitals.sort((a: { distance: number; }, b: { distance: number; }) => a.distance - b.distance);
+
+        setHospitals(mappedHospitals);
+
+        setFirstAidGuideline(result.data.firstAidGuideLine || "");
 
       } catch (err) {
         console.error(err);
-        setDefaultStatement("데이터를 불러오는데 실패했습니다.");
       }
     };
     fetchData();
@@ -127,19 +147,17 @@ export default function Map() {
   // 병원 상세 정보 요청 함수 (수정됨)
   const handleHospitalClick = async (h: Hospital) => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://43.200.107.7:8080";
-      const res = await fetch(`${API_URL}/hospitals/detail`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const queryParams = new URLSearchParams({
+        'hospital-id': h.hospital_id.toString(), // 파라미터 이름을 'hospital-id'로 변경
+        latitude: h.location.latitude.toString(),
+        longitude: h.location.longitude.toString(),
+      });
+      const res = await fetch(`${API_URL}/hospitals/details?${queryParams.toString()}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          hospital_id: h.hospital_id,
-          location: {
-            latitude: h.location.latitude,
-            longitude: h.location.longitude,
-          },
-        }),
       });
       if (!res.ok) throw new Error(`상세정보 호출 실패 ${res.status}`);
       const json = await res.json();
@@ -166,17 +184,14 @@ export default function Map() {
               onClick={() => setActiveMarker(null)} // 맵 클릭 시 InfoWindow 닫기
             >
               {/* 현재 위치 마커 */}
-              <Marker position={currentPosition} />
+              {currentPosition && <MarkerF position={currentPosition} />}
 
               {/* 병원 위치 마커들 */}
               {hospitals.map((hospital) => (
-                <Marker
+                <MarkerF
                   key={hospital.hospital_id}
                   position={{ lat: hospital.location.latitude, lng: hospital.location.longitude }}
                   onClick={() => {
-                    // 마커 클릭 시 해당 병원 정보로 activeMarker 상태 업데이트
-                    // InfoWindow를 사용하거나, 하단 리스트의 항목을 하이라이트하는 등의 인터랙션 가능
-                    // 여기서는 간단히 handleHospitalClick을 호출하여 모달을 띄우도록 함
                     handleHospitalClick(hospital);
                   }}
                 />
@@ -195,15 +210,16 @@ export default function Map() {
         <Accordion variant="shadow" className="bg-white rounded-b-2xl shadow-xl overflow-hidden">
           <AccordionItem
             key="defaultStatement"
+            className="w-full pt-[100px]"
+            textValue="진단 정보" // 이 부분을 추가합니다.
             title={
               <div className="px-5 py-3 flex items-center justify-between pb-0">
-                <span className="font-bold text-2xl">진단 정보</span>
+                <span className="font-bold text-2xl">{symptom}</span>
               </div>
             }
-            className="w-full pt-[100px]"
           >
             <div className="pt-0 px-5 pb-3 font-normal text-sm whitespace-pre-line">
-              {defaultStatement}
+              {firstAidGuideline}
             </div>
           </AccordionItem>
         </Accordion>
@@ -224,7 +240,7 @@ export default function Map() {
               <div className="flex flex-col w-full gap-2 items-center justify-center">
                 <div className="flex w-[315px] items-center justify-between">
                   <span className="font-bold text-2xl">{h.name}</span>
-                  <span>{h.distance}km</span>
+                  <span>{h.distance !== undefined ? h.distance.toFixed(2) : 'N/A'}km</span>
                 </div>
                 <div className="flex pt-0 w-[315px] items-center justify-between">
                   <span>{h.phone_number}</span>
@@ -234,11 +250,6 @@ export default function Map() {
             </Button>
           </div>
         ))}
-        {firstAidGuideline && (
-          <div className="p-4 text-sm whitespace-pre-line">
-            {firstAidGuideline}
-          </div>
-        )}
       </div>
 
       {/* **추가된 모달** */}
@@ -254,7 +265,7 @@ export default function Map() {
             <p><strong>주소:</strong> {selectedHospitalDetail.address}</p>
             <p><strong>운영시간:</strong> {selectedHospitalDetail.operatingHours}</p>
             <p><strong>전화번호:</strong> {selectedHospitalDetail.phoneNumber}</p>
-            <p><strong>거리:</strong> {selectedHospitalDetail.distance?.toFixed(2)}km</p>
+            <p><strong>거리:</strong> {selectedHospitalDetail.distance !== undefined ? selectedHospitalDetail.distance.toFixed(2) : 'N/A'}km</p>
             <p><strong>응급실 여부:</strong> {selectedHospitalDetail.isEmergencyRoom ? "O" : "X"}</p>
             <p><strong>전문 진료과:</strong> {selectedHospitalDetail.specialties.join(", ")}</p>
             <div className="mt-4 flex justify-end">
