@@ -88,7 +88,7 @@ export default function HospitalClientComponent() {
 
     const fetchData = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://43.200.107.7:8080";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://uhdiapa.com:8080";
 
         const response = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
           method: "POST",
@@ -135,7 +135,7 @@ export default function HospitalClientComponent() {
   // 병원 상세 정보 요청 함수
   const handleHospitalClick = async (h: Hospital) => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://43.200.107.7:8080";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://uhdiapa.com:8080";
       const queryParams = new URLSearchParams({
         'hospital-id': h.hospital_id.toString(),
         latitude: h.location.latitude.toString(),
