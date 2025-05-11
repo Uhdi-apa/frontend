@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { GoogleMap, DirectionsService, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api'; // useJsApiLoader 추가
+import { GoogleMap, DirectionsService, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
 
 const containerStyle = {
@@ -19,9 +19,8 @@ export default function DirectionsClientComponent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const { isLoaded, loadError } = useJsApiLoader({ // useJsApiLoader 사용
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_FALLBACK_GOOGLE_MAPS_KEY",
-    // libraries: ['places'], // 필요한 경우 다른 라이브러리 추가
   });
 
   const [origin, setOrigin] = useState<LocationPoint | null>(null);
@@ -29,8 +28,7 @@ export default function DirectionsClientComponent() {
   const [destinationName, setDestinationName] = useState<string>('');
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   const [mapCenter, setMapCenter] = useState<LocationPoint | undefined>(undefined);
-  // travelMode 초기값을 string으로 변경하고, API 로드 후 google.maps 객체 사용
-  const [travelMode, setTravelMode] = useState<string>('DRIVING'); // 초기값을 string으로
+  const [travelMode, setTravelMode] = useState<string>('DRIVING'); // 기본값 자동차
 
   const count = useRef(0);
 
@@ -49,18 +47,40 @@ export default function DirectionsClientComponent() {
       setDestination({ lat: destLat, lng: destLng });
     }
     setDestinationName(destNameParam);
-
+    // 컴포넌트 마운트 시 또는 origin/destination 변경 시 경로 재요청을 위해 count 초기화
+    count.current = 0;
+    setDirectionsResponse(null);
   }, [searchParams]);
 
   const directionsCallback = (
     response: google.maps.DirectionsResult | null,
     status: google.maps.DirectionsStatus
   ) => {
-    if (status === 'OK' && response) {
+    console.log(`Directions Request Details:
+      Mode: ${travelMode},
+      Origin: ${JSON.stringify(origin)},
+      Destination: ${JSON.stringify(destination)},
+      Status: ${status}`);
+
+    if (status === google.maps.DirectionsStatus.OK && response) {
+      console.log('Directions Response:', response);
       setDirectionsResponse(response);
     } else {
-      console.error(`Directions request failed due to ${status}`);
+      console.error(`Directions request failed for mode ${travelMode}. Status: ${status}`);
+      setDirectionsResponse(null);
+      // 사용자에게 알림 (예: alert 또는 토스트 메시지)
+      if (status === google.maps.DirectionsStatus.ZERO_RESULTS) {
+        alert(`선택하신 이동 수단(${travelMode})에 대한 경로를 찾을 수 없습니다.`);
+      } else {
+        alert(`경로 요청에 실패했습니다. 상태: ${status}`);
+      }
     }
+  };
+
+  const handleTravelModeChange = (mode: string) => {
+    setTravelMode(mode);
+    setDirectionsResponse(null); // 이전 경로 지우기
+    count.current = 0; // 경로 재요청 허용
   };
 
   if (loadError) {
@@ -77,67 +97,96 @@ export default function DirectionsClientComponent() {
     );
   }
 
-  // isLoaded가 true가 된 이후에 google.maps 객체에 접근
-  const currentTravelMode = google.maps.TravelMode[travelMode as keyof typeof google.maps.TravelMode];
+  const currentTravelModeKey = travelMode as keyof typeof google.maps.TravelMode;
+  const currentGoogleTravelMode = google.maps.TravelMode[currentTravelModeKey] || google.maps.TravelMode.DRIVING;
 
   return (
     <div className="relative w-full h-screen">
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={mapCenter}
-        zoom={15}
-      >
-        {origin && destination && (
-          <>
-            {!directionsResponse && count.current === 0 && (
-              <DirectionsService
-                options={{
-                  destination: destination,
-                  origin: origin,
-                  travelMode: currentTravelMode, // 수정된 travelMode 사용
-                }}
-                callback={(response, status) => {
-                  count.current += 1;
-                  directionsCallback(response, status);
-                }}
-              />
-            )}
-            {directionsResponse && (
-              <DirectionsRenderer
-                options={{
-                  directions: directionsResponse,
-                }}
-              />
-            )}
-          </>
-        )}
-      </GoogleMap>
-      <div className="absolute top-4 left-4 z-10 bg-white p-4 rounded shadow-lg">
-        <h2 className="text-lg font-semibold mb-2">경로 안내</h2>
-        <p><strong>출발지:</strong> 현재 위치</p>
-        <p><strong>목적지:</strong> {destinationName}</p>
-        <div className="mt-2">
-          <span className="mr-2">이동 수단:</span>
-          <select
-            value={travelMode} // string 값 사용
-            onChange={(e) => {
-              setTravelMode(e.target.value); // string 값으로 설정
-              setDirectionsResponse(null);
-              count.current = 0;
-            }}
-            className="border rounded p-1"
-          >
-            {/* google.maps 객체가 로드된 후 옵션 렌더링 */}
-            {Object.keys(google.maps.TravelMode).map((mode) => (
-              <option key={mode} value={mode}>
-                {mode.charAt(0) + mode.slice(1).toLowerCase()}
-              </option>
-            ))}
-          </select>
+      {/* 상단 정보 및 컨트롤 패널 */}
+      <div className="absolute top-0 left-0 right-0 h-[120px] bg-white p-3 shadow-lg z-10 flex flex-col justify-between">
+        <div>
+          <p className="text-sm font-medium truncate">
+            <strong>출발지:</strong> 현재 위치 ({origin ? `${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : '로딩 중...'})
+          </p>
+          <p className="text-sm font-medium mt-1 truncate">
+            <strong>목적지:</strong> {destinationName} ({destination ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}` : '로딩 중...'})
+          </p>
         </div>
-        <Button onPress={() => router.back()} className="mt-4 w-full">
-          뒤로가기
-        </Button>
+        <div className="flex justify-start items-center mt-2 space-x-2">
+          <Button
+            size="sm"
+            variant={travelMode === 'WALKING' ? "solid" : "bordered"}
+            color="primary"
+            onPress={() => handleTravelModeChange('WALKING')}
+            className="flex-grow md:flex-grow-0"
+          >
+            도보
+          </Button>
+          <Button
+            size="sm"
+            variant={travelMode === 'DRIVING' ? "solid" : "bordered"}
+            color="primary"
+            onPress={() => handleTravelModeChange('DRIVING')}
+            className="flex-grow md:flex-grow-0"
+          >
+            자동차
+          </Button>
+          <Button
+            size="sm"
+            variant={travelMode === 'TRANSIT' ? "solid" : "bordered"}
+            color="primary"
+            onPress={() => handleTravelModeChange('TRANSIT')}
+            className="flex-grow md:flex-grow-0"
+          >
+            대중교통
+          </Button>
+          <Button 
+            size="sm" 
+            variant="light" 
+            onPress={() => router.back()} 
+            className="ml-auto px-3 py-1.5" // ml-auto로 오른쪽 정렬, 패딩 조정
+          >
+            뒤로
+          </Button>
+        </div>
+      </div>
+
+      {/* 지도 영역 (상단 패널 높이만큼 아래로 이동) */}
+      <div className="absolute top-[120px] left-0 right-0 bottom-0">
+        <GoogleMap
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          center={mapCenter}
+          zoom={15}
+          options={{ gestureHandling: 'greedy', disableDefaultUI: true, zoomControl: true }} // 모바일 제스처 및 UI 개선
+        >
+          {isLoaded && origin && destination && (
+            <>
+              {/* count.current가 0이고, directionsResponse가 없을 때만 DirectionsService 호출 */}
+              {!directionsResponse && count.current === 0 && (
+                <DirectionsService
+                  options={{
+                    destination: destination,
+                    origin: origin,
+                    travelMode: currentGoogleTravelMode,
+                  }}
+                  callback={(response, status) => {
+                    if (count.current === 0) { // 중복 콜백 방지 (선택적)
+                       count.current += 1;
+                       directionsCallback(response, status);
+                    }
+                  }}
+                />
+              )}
+              {directionsResponse && (
+                <DirectionsRenderer
+                  options={{
+                    directions: directionsResponse,
+                  }}
+                />
+              )}
+            </>
+          )}
+        </GoogleMap>
       </div>
     </div>
   );
