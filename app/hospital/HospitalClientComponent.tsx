@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { GoogleMap, LoadScript, MarkerF } from "@react-google-maps/api";
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation'; // useRouter 추가
 
 // 지도 컨테이너 스타일
 const containerStyle = {
@@ -42,6 +42,7 @@ interface HospitalDetail {
 
 export default function HospitalClientComponent() {
   const searchParams = useSearchParams();
+  const router = useRouter(); // useRouter 인스턴스 생성
 
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [firstAidGuideline, setFirstAidGuideline] = useState<string>("");
@@ -157,6 +158,24 @@ export default function HospitalClientComponent() {
     }
   };
 
+  // 경로 안내 페이지로 이동하는 함수
+  const handleDirectionsClick = () => {
+    if (currentPosition && selectedHospitalDetail) {
+      const params = new URLSearchParams({
+        currentLat: currentPosition.lat.toString(),
+        currentLng: currentPosition.lng.toString(),
+        destLat: selectedHospitalDetail.latitude.toString(),
+        destLng: selectedHospitalDetail.longitude.toString(),
+        destName: selectedHospitalDetail.hospitalName,
+      });
+      router.push(`/directions?${params.toString()}`);
+      setIsModalOpen(false); // 모달 닫기
+    } else {
+      console.error("현재 위치 또는 병원 정보가 없습니다.");
+      // 사용자에게 알림을 표시할 수 있습니다.
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
       {/* 지도 영역 */}
@@ -262,8 +281,9 @@ export default function HospitalClientComponent() {
             <p><strong>거리:</strong> {selectedHospitalDetail.distance !== undefined ? selectedHospitalDetail.distance.toFixed(2) : 'N/A'}km</p>
             <p><strong>응급실 여부:</strong> {selectedHospitalDetail.isEmergencyRoom ? "O" : "X"}</p>
             <p><strong>전문 진료과:</strong> {selectedHospitalDetail.specialties?.join(", ") || "정보 없음"}</p>
-            <div className="mt-4 flex justify-end">
-              <Button onPress={() => setIsModalOpen(false)}>닫기</Button>
+            <div className="mt-6 flex justify-between"> {/* 버튼 정렬 변경 */}
+              <Button onPress={() => setIsModalOpen(false)} variant="bordered" className="mr-2">닫기</Button>
+              <Button onPress={handleDirectionsClick} color="primary">경로 안내</Button> {/* 경로 안내 버튼 추가 */}
             </div>
           </div>
         </div>
