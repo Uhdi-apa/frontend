@@ -1,5 +1,5 @@
-import { Suspense } from 'react';
-import DirectionsClientComponent from './DirectionsClientComponent';
+import { Suspense } from "react";
+import DirectionsClientComponent from "./DirectionsClientComponent";
 
 function Loading() {
   return (
