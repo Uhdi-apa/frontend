@@ -88,13 +88,12 @@ export default function DirectionsClientComponent() {
     }
 
     let apiTravelMode = travelMode.toUpperCase();
-    if (travelMode.toUpperCase() === 'WALKING') apiTravelMode = 'WALK';
+    if (travelMode === 'WALK') apiTravelMode = 'WALK';
 
-    const requestBody = {
+    const requestBodyBase: any = {
       origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
       destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
       travelMode: apiTravelMode,
-      routingPreference: "TRAFFIC_AWARE",
       computeAlternativeRoutes: false,
       routeModifiers: {
         avoidTolls: false,
@@ -105,7 +104,14 @@ export default function DirectionsClientComponent() {
       units: "METRIC",
     };
 
-    console.log("Requesting route with body:", JSON.stringify(requestBody));
+    if (apiTravelMode === 'DRIVE' || apiTravelMode === 'TWO_WHEELER') {
+      requestBodyBase.routingPreference = "TRAFFIC_AWARE";
+    } else if (apiTravelMode === 'TRANSIT') {
+      // TRANSIT 모드에서는 routingPreference를 사용하지 않거나,
+      // 다른 옵션 (예: departureTime, arrivalTime)을 설정할 수 있습니다.
+    }
+
+    console.log("Requesting route with body:", JSON.stringify(requestBodyBase));
 
     try {
       const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
@@ -113,15 +119,17 @@ export default function DirectionsClientComponent() {
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.polyline.encodedPolyline',
+          'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(requestBodyBase),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error fetching route:', response.status, errorData);
-        alert(`경로 요청 실패: ${errorData.error?.message || response.statusText}`);
+        const apiErrorMessage = errorData.error?.message || response.statusText;
+        const userFriendlyMessage = errorData.error?.details?.[0]?.description || apiErrorMessage;
+        alert(`경로 요청 실패: ${userFriendlyMessage}`);
         setRoutePath([]);
         setRouteInfo(null);
         fetchCount.current = 0;
@@ -148,8 +156,8 @@ export default function DirectionsClientComponent() {
           mapRef.current.fitBounds(bounds);
         }
       } else {
-        console.log('No routes found or polyline missing.');
-        alert('경로를 찾을 수 없습니다.');
+        console.log('No routes found or polyline missing. API Response:', data);
+        alert('경로를 찾을 수 없습니다. API에서 반환된 경로가 없습니다.');
         setRoutePath([]);
         setRouteInfo(null);
       }
@@ -171,15 +179,7 @@ export default function DirectionsClientComponent() {
   }, [isLoaded, origin, destination, travelMode]);
 
   const handleTravelModeChange = (mode: string) => {
-    if (mode === 'WALKING') {
-      setTravelMode('WALK');
-    } else if (mode === 'DRIVING') {
-      setTravelMode('DRIVE');
-    } else if (mode === 'TRANSIT') {
-      setTravelMode('TRANSIT');
-    } else {
-      setTravelMode(mode);
-    }
+    setTravelMode(mode.toUpperCase());
   };
 
   if (loadError) {
@@ -217,7 +217,7 @@ export default function DirectionsClientComponent() {
             size="sm"
             variant={travelMode === 'WALK' ? "solid" : "bordered"}
             color="primary"
-            onPress={() => handleTravelModeChange('WALKING')}
+            onPress={() => handleTravelModeChange('WALK')}
             className="flex-grow md:flex-grow-0"
           >
             도보
@@ -226,7 +226,7 @@ export default function DirectionsClientComponent() {
             size="sm"
             variant={travelMode === 'DRIVE' ? "solid" : "bordered"}
             color="primary"
-            onPress={() => handleTravelModeChange('DRIVING')}
+            onPress={() => handleTravelModeChange('DRIVE')}
             className="flex-grow md:flex-grow-0"
           >
             자동차
