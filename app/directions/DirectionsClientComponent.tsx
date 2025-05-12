@@ -6,7 +6,8 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useRouter as useNextRouter } from 'next/navigation';
 import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
 
@@ -32,7 +33,7 @@ interface TransitStop {
 
 export default function DirectionsClientComponent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const nextRouter = useNextRouter();
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_FALLBACK_GOOGLE_MAPS_KEY",
@@ -94,6 +95,10 @@ export default function DirectionsClientComponent() {
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
+  }, []);
+
+  const handleGoBack = useCallback(() => {
+    window.history.back();
   }, []);
 
   useEffect(() => {
@@ -248,7 +253,7 @@ export default function DirectionsClientComponent() {
           <Button
             size="sm"
             variant="light"
-            onPress={() => router.back()}
+            onPress={handleGoBack}
             className="ml-auto px-3 py-1.5"
           >
             뒤로
