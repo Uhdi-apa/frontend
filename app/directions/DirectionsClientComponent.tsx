@@ -1,3 +1,8 @@
+/* eslint-disable react/jsx-sort-props */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable no-console */
+/* eslint-disable padding-line-between-statements */
+/* eslint-disable prettier/prettier */
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
@@ -43,8 +48,13 @@ export default function DirectionsClientComponent() {
   const [selectedStop, setSelectedStop] = useState<TransitStop | null>(null);
 
   const [mapCenter, setMapCenter] = useState<LocationPoint | undefined>(undefined);
-  const [travelMode, setTravelMode] = useState<google.maps.TravelMode>(google.maps.TravelMode.DRIVING);
-  
+  const [travelMode, setTravelMode] = useState<string>("DRIVING"); // 문자열로 먼저 저장
+
+  const currentTravelMode = isLoaded ? 
+    (travelMode === "DRIVING" ? google.maps.TravelMode.DRIVING : 
+     travelMode === "WALKING" ? google.maps.TravelMode.WALKING : 
+     google.maps.TravelMode.TRANSIT) : "DRIVING";
+
   const directionsCallback = useRef<((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => void) | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
 
@@ -72,7 +82,7 @@ export default function DirectionsClientComponent() {
 
   // 대중교통 정류장 정보 추출
   useEffect(() => {
-    if (directionsResponse && travelMode === google.maps.TravelMode.TRANSIT) {
+    if (directionsResponse && currentTravelMode === google.maps.TravelMode.TRANSIT) {
       const stops: TransitStop[] = [];
 
       // 경로의 각 구간에서 대중교통 정보 추출
@@ -118,7 +128,7 @@ export default function DirectionsClientComponent() {
     } else {
       setTransitStops([]);
     }
-  }, [directionsResponse, travelMode]);
+  }, [directionsResponse, currentTravelMode]);
 
   // 경로 정보 추출
   useEffect(() => {
@@ -143,7 +153,7 @@ export default function DirectionsClientComponent() {
   }, [directionsResponse]);
 
   // 이동 모드 변경 처리
-  const handleTravelModeChange = (mode: google.maps.TravelMode) => {
+  const handleTravelModeChange = (mode: string) => {
     setTravelMode(mode);
     setDirectionsResponse(null); // 이전 경로 지우기
     setRouteInfo(null);
@@ -174,7 +184,7 @@ export default function DirectionsClientComponent() {
     return <div>Error loading maps: {loadError.message}</div>;
   }
 
-  if (!isLoaded || !google) {
+  if (!isLoaded) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-100">
         <div className="text-xl font-semibold text-gray-700">
@@ -197,7 +207,7 @@ export default function DirectionsClientComponent() {
           {routeInfo && (
             <p className="text-sm font-medium mt-1">
               <strong>예상:</strong> {routeInfo.duration}, {routeInfo.distance}
-              {travelMode === google.maps.TravelMode.TRANSIT && transitStops.length > 0 && (
+              {currentTravelMode === google.maps.TravelMode.TRANSIT && transitStops.length > 0 && (
                 <span> (대중교통 정류장 {transitStops.length}곳)</span>
               )}
             </p>
@@ -206,27 +216,29 @@ export default function DirectionsClientComponent() {
         <div className="flex justify-start items-center mt-2 space-x-2">
           <Button
             size="sm"
-            variant={travelMode === google.maps.TravelMode.WALKING ? "solid" : "bordered"}
+            variant={travelMode === "WALKING" ? "solid" : "bordered"}
             color="primary"
-            onPress={() => handleTravelModeChange(google.maps.TravelMode.WALKING)}
+            onPress={() => handleTravelModeChange("WALKING")}
             className="flex-grow md:flex-grow-0"
           >
             도보
           </Button>
+
           <Button
             size="sm"
-            variant={travelMode === google.maps.TravelMode.DRIVING ? "solid" : "bordered"}
+            variant={travelMode === "DRIVING" ? "solid" : "bordered"}
             color="primary"
-            onPress={() => handleTravelModeChange(google.maps.TravelMode.DRIVING)}
+            onPress={() => handleTravelModeChange("DRIVING")}
             className="flex-grow md:flex-grow-0"
           >
             자동차
           </Button>
+
           <Button
             size="sm"
-            variant={travelMode === google.maps.TravelMode.TRANSIT ? "solid" : "bordered"}
+            variant={travelMode === "TRANSIT" ? "solid" : "bordered"}
             color="primary"
-            onPress={() => handleTravelModeChange(google.maps.TravelMode.TRANSIT)}
+            onPress={() => handleTravelModeChange("TRANSIT")}
             className="flex-grow md:flex-grow-0"
           >
             대중교통
@@ -251,7 +263,7 @@ export default function DirectionsClientComponent() {
             gestureHandling: 'greedy', 
             disableDefaultUI: true, 
             zoomControl: true,
-            styles: travelMode === google.maps.TravelMode.TRANSIT ? [
+            styles: currentTravelMode === google.maps.TravelMode.TRANSIT ? [
               { featureType: "transit", elementType: "all", stylers: [{ visibility: "on" }] },
               { featureType: "transit.station", elementType: "all", stylers: [{ visibility: "on" }] },
             ] : []
@@ -264,10 +276,13 @@ export default function DirectionsClientComponent() {
               options={{
                 origin: origin,
                 destination: destination,
-                travelMode: travelMode,
+                travelMode: isLoaded ? 
+                  (travelMode === "DRIVING" ? google.maps.TravelMode.DRIVING : 
+                   travelMode === "WALKING" ? google.maps.TravelMode.WALKING : 
+                   google.maps.TravelMode.TRANSIT) : google.maps.TravelMode.DRIVING,
                 provideRouteAlternatives: false,
                 unitSystem: google.maps.UnitSystem.METRIC,
-                ...(travelMode === google.maps.TravelMode.DRIVING 
+                ...(currentTravelMode === google.maps.TravelMode.DRIVING 
                   ? {
                       drivingOptions: {
                         departureTime: new Date(),
@@ -275,7 +290,7 @@ export default function DirectionsClientComponent() {
                       }
                     } 
                   : {}),
-                ...(travelMode === google.maps.TravelMode.TRANSIT
+                ...(currentTravelMode === google.maps.TravelMode.TRANSIT
                   ? {
                       transitOptions: {
                         departureTime: new Date(),
@@ -294,9 +309,9 @@ export default function DirectionsClientComponent() {
                 directions: directionsResponse,
                 suppressMarkers: false, // 출발지와 목적지 마커 표시
                 polylineOptions: {
-                  strokeColor: travelMode === google.maps.TravelMode.WALKING 
+                  strokeColor: currentTravelMode === google.maps.TravelMode.WALKING 
                     ? '#4285F4' // 도보는 파란색
-                    : travelMode === google.maps.TravelMode.TRANSIT 
+                    : currentTravelMode === google.maps.TravelMode.TRANSIT 
                       ? '#0F9D58' // 대중교통은 녹색
                       : '#DB4437', // 자동차는 빨간색
                   strokeOpacity: 0.8,
@@ -307,7 +322,7 @@ export default function DirectionsClientComponent() {
           )}
           
           {/* 대중교통 정류장 마커 */}
-          {travelMode === google.maps.TravelMode.TRANSIT && transitStops.map((stop, index) => (
+          {currentTravelMode === google.maps.TravelMode.TRANSIT && transitStops.map((stop, index) => (
             <MarkerF
               key={`transit-stop-${index}`}
               position={stop.position}
