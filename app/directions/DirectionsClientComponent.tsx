@@ -92,7 +92,7 @@ export default function DirectionsClientComponent() {
     scaledSize: isLoaded ? new google.maps.Size(25, 25) : undefined
   }), [isLoaded]);
 
-  const onMapLoad = useCallback((map) => {
+  const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
