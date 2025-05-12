@@ -3,6 +3,7 @@ import {Metadata, Viewport} from "next";
 import {Roboto} from "next/font/google";
 
 import {Providers} from "./providers";
+import { GoogleMapsProvider } from './contexts/GoogleMapsContext';
 
 import {siteConfig} from "@/config/site";
 
@@ -41,12 +42,14 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html data-theme="light" lang="ko" style={{colorScheme: "light"}}>
+        <html lang="ko">
         <body className={`h-screen bg-background ${roboto.className}`}>
-        <Providers>
-            {/* 양쪽 모두 28px 마진 적용 */}
-            <div className="mx-7">{children}</div>
-        </Providers>
+        <GoogleMapsProvider>
+            <Providers>
+                {/* 양쪽 모두 28px 마진 적용 */}
+                <div className="mx-7">{children}</div>
+            </Providers>
+        </GoogleMapsProvider>
         </body>
         </html>
     );

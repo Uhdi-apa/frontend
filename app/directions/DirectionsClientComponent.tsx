@@ -1,18 +1,11 @@
-/* eslint-disable react/jsx-sort-props */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable no-console */
-/* eslint-disable padding-line-between-statements */
-/* eslint-disable prettier/prettier */
 "use client";
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useRouter as useNextRouter } from 'next/navigation';
-import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
+import { useRouter } from 'next/navigation';
+import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
-
-// 컴포넌트 외부에 상수로 libraries 배열 정의
-const GOOGLE_MAPS_LIBRARIES: ("geometry" | "places" | "drawing" | "visualization")[] = ['geometry'];
+import { useGoogleMaps } from '../contexts/GoogleMapsContext';
 
 const containerStyle = {
   width: '100%',
@@ -33,12 +26,9 @@ interface TransitStop {
 
 export default function DirectionsClientComponent() {
   const searchParams = useSearchParams();
-  const nextRouter = useNextRouter();
+  const router = useRouter();
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_FALLBACK_GOOGLE_MAPS_KEY",
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
+  const { isLoaded, loadError, googleMaps } = useGoogleMaps();
 
   const [origin, setOrigin] = useState<LocationPoint | null>(null);
   const [destination, setDestination] = useState<LocationPoint | null>(null);
@@ -49,13 +39,15 @@ export default function DirectionsClientComponent() {
   const [selectedStop, setSelectedStop] = useState<TransitStop | null>(null);
 
   const [mapCenter, setMapCenter] = useState<LocationPoint | undefined>(undefined);
+  const [googleInitialized, setGoogleInitialized] = useState(false);
 
   const directionsCallback = useRef<((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => void) | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const directionsRequestSent = useRef(false);
 
   const mapOptions = useMemo(() => ({
-    gestureHandling: 'greedy', 
-    disableDefaultUI: true, 
+    gestureHandling: 'greedy',
+    disableDefaultUI: true,
     zoomControl: true,
     styles: [
       { featureType: "transit", elementType: "all", stylers: [{ visibility: "on" }] },
@@ -64,19 +56,19 @@ export default function DirectionsClientComponent() {
   }), []);
 
   const directionsOptions = useMemo(() => {
-    if (!origin || !destination || !isLoaded) return null;
-    
+    if (!origin || !destination || !isLoaded || !googleMaps) return null;
+
     return {
       origin: origin,
       destination: destination,
-      travelMode: isLoaded ? google.maps.TravelMode.TRANSIT : google.maps.TravelMode.TRANSIT,
+      travelMode: googleMaps.TravelMode.TRANSIT,
       provideRouteAlternatives: false,
-      unitSystem: google.maps.UnitSystem.METRIC,
+      unitSystem: googleMaps.UnitSystem.METRIC,
       transitOptions: {
         departureTime: new Date(),
       }
     };
-  }, [origin, destination, isLoaded]);
+  }, [origin, destination, isLoaded, googleMaps]);
 
   const rendererOptions = useMemo(() => ({
     directions: directionsResponse,
@@ -88,18 +80,23 @@ export default function DirectionsClientComponent() {
     }
   }), [directionsResponse]);
 
-  const stopMarkerIcon = useMemo(() => ({
-    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-    scaledSize: isLoaded ? new google.maps.Size(25, 25) : undefined
-  }), [isLoaded]);
+  const stopMarkerIcon = useMemo(() => {
+    if (!isLoaded || !googleMaps) return { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' };
+
+    return {
+      url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+      scaledSize: new googleMaps.Size(25, 25)
+    };
+  }, [isLoaded, googleMaps]);
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
+    setGoogleInitialized(true);
   }, []);
 
   const handleGoBack = useCallback(() => {
-    window.history.back();
-  }, []);
+    router.back();
+  }, [router]);
 
   useEffect(() => {
     const currentLat = parseFloat(searchParams.get('currentLat') || '');
@@ -116,96 +113,99 @@ export default function DirectionsClientComponent() {
       setDestination({ lat: destLat, lng: destLng });
     }
     setDestinationName(destNameParam);
-    
-    // 경로 데이터 초기화
+
     setDirectionsResponse(null);
     setRouteInfo(null);
     setTransitStops([]);
+    directionsRequestSent.current = false;
+
   }, [searchParams]);
 
   useEffect(() => {
-    if (directionsResponse) {
-      const stops: TransitStop[] = [];
+    if (!directionsResponse || !isLoaded || !googleMaps) return;
 
-      if (directionsResponse.routes && directionsResponse.routes.length > 0) {
-        const route = directionsResponse.routes[0];
-        if (route.legs && route.legs.length > 0) {
-          route.legs.forEach(leg => {
-            if (leg.steps) {
-              leg.steps.forEach(step => {
-                if (step.travel_mode === google.maps.TravelMode.TRANSIT && step.transit) {
-                  if (step.transit.departure_stop) {
-                    stops.push({
-                      position: {
-                        lat: step.transit.departure_stop.location.lat(),
-                        lng: step.transit.departure_stop.location.lng()
-                      },
-                      name: step.transit.departure_stop.name,
-                      isTransfer: false,
-                      transitLine: step.transit.line?.short_name || step.transit.line?.name
-                    });
-                  }
-                  
-                  if (step.transit.arrival_stop) {
-                    stops.push({
-                      position: {
-                        lat: step.transit.arrival_stop.location.lat(),
-                        lng: step.transit.arrival_stop.location.lng()
-                      },
-                      name: step.transit.arrival_stop.name,
-                      isTransfer: false
-                    });
-                  }
+    const stops: TransitStop[] = [];
+
+    if (directionsResponse.routes && directionsResponse.routes.length > 0) {
+      const route = directionsResponse.routes[0];
+      if (route.legs && route.legs.length > 0) {
+        route.legs.forEach(leg => {
+          if (leg.steps) {
+            leg.steps.forEach(step => {
+              if (step.travel_mode === googleMaps.TravelMode.TRANSIT && step.transit) {
+                if (step.transit.departure_stop) {
+                  stops.push({
+                    position: {
+                      lat: step.transit.departure_stop.location.lat(),
+                      lng: step.transit.departure_stop.location.lng()
+                    },
+                    name: step.transit.departure_stop.name,
+                    isTransfer: false,
+                    transitLine: step.transit.line?.short_name || step.transit.line?.name
+                  });
                 }
-              });
-            }
-          });
-        }
-      }
-      
-      setTransitStops(stops);
-    } else {
-      setTransitStops([]);
-    }
-  }, [directionsResponse]);
 
-  useEffect(() => {
-    if (directionsResponse) {
-      if (directionsResponse.routes && directionsResponse.routes.length > 0) {
-        const route = directionsResponse.routes[0];
-        if (route.legs && route.legs.length > 0) {
-          const leg = route.legs[0];
-          
-          const distance = leg.distance?.text || '';
-          const duration = leg.duration?.text || '';
-          setRouteInfo({ distance, duration });
-          
-          if (mapRef.current && route.bounds) {
-            mapRef.current.fitBounds(route.bounds);
+                if (step.transit.arrival_stop) {
+                  stops.push({
+                    position: {
+                      lat: step.transit.arrival_stop.location.lat(),
+                      lng: step.transit.arrival_stop.location.lng()
+                    },
+                    name: step.transit.arrival_stop.name,
+                    isTransfer: false
+                  });
+                }
+              }
+            });
           }
+        });
+      }
+    }
+
+    setTransitStops(stops);
+  }, [directionsResponse, isLoaded, googleMaps]);
+
+  useEffect(() => {
+    if (!directionsResponse) return;
+
+    if (directionsResponse.routes && directionsResponse.routes.length > 0) {
+      const route = directionsResponse.routes[0];
+      if (route.legs && route.legs.length > 0) {
+        const leg = route.legs[0];
+
+        const distance = leg.distance?.text || '';
+        const duration = leg.duration?.text || '';
+        setRouteInfo({ distance, duration });
+
+        if (mapRef.current && route.bounds) {
+          mapRef.current.fitBounds(route.bounds);
         }
       }
     }
   }, [directionsResponse]);
 
   useEffect(() => {
+    if (!isLoaded || !googleMaps) return;
+
     directionsCallback.current = (
       result: google.maps.DirectionsResult | null,
       status: google.maps.DirectionsStatus
     ) => {
       console.log(`Directions Request Status: ${status}`);
-      
-      if (status === google.maps.DirectionsStatus.OK && result) {
+
+      if (status === googleMaps.DirectionsStatus.OK && result) {
         console.log('Directions Response:', result);
         setDirectionsResponse(result);
+        directionsRequestSent.current = true;
       } else {
         console.error(`Directions request failed. Status: ${status}`);
         alert(`경로를 찾을 수 없습니다. ${status}`);
         setDirectionsResponse(null);
         setRouteInfo(null);
+        directionsRequestSent.current = true;
       }
     };
-  }, []);
+  }, [isLoaded, googleMaps]);
 
   if (loadError) {
     return <div>Error loading maps: {loadError.message}</div>;
@@ -269,20 +269,21 @@ export default function DirectionsClientComponent() {
           options={mapOptions}
           onLoad={onMapLoad}
         >
-          {directionsOptions && !directionsResponse && directionsCallback.current && (
-            <DirectionsService
-              options={directionsOptions}
-              callback={directionsCallback.current}
-            />
-          )}
-          
+          {directionsOptions && !directionsResponse && !directionsRequestSent.current &&
+            directionsCallback.current && googleMaps && (
+              <DirectionsService
+                options={directionsOptions}
+                callback={directionsCallback.current}
+              />
+            )}
+
           {directionsResponse && (
             <DirectionsRenderer
               options={rendererOptions}
             />
           )}
-          
-          {transitStops.map((stop, index) => (
+
+          {googleInitialized && transitStops.map((stop, index) => (
             <MarkerF
               key={`transit-stop-${index}`}
               position={stop.position}
@@ -290,8 +291,8 @@ export default function DirectionsClientComponent() {
               onClick={() => setSelectedStop(stop)}
             />
           ))}
-          
-          {selectedStop && (
+
+          {googleInitialized && selectedStop && (
             <InfoWindow
               position={selectedStop.position}
               onCloseClick={() => setSelectedStop(null)}

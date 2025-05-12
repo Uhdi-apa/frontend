@@ -3,10 +3,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GoogleMap, LoadScript, MarkerF } from "@react-google-maps/api";
+import { GoogleMap, MarkerF } from "@react-google-maps/api"; // LoadScript 제거
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
-import { useSearchParams, useRouter } from 'next/navigation'; // useRouter 추가
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useGoogleMaps } from '../contexts/GoogleMapsContext'; // 컨텍스트 import
 
 // 지도 컨테이너 스타일
 const containerStyle = {
@@ -42,7 +43,10 @@ interface HospitalDetail {
 
 export default function HospitalClientComponent() {
   const searchParams = useSearchParams();
-  const router = useRouter(); // useRouter 인스턴스 생성
+  const router = useRouter();
+  
+  // Google Maps Context 사용
+  const { isLoaded, loadError, googleMaps } = useGoogleMaps();
 
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [firstAidGuideline, setFirstAidGuideline] = useState<string>("");
@@ -54,6 +58,7 @@ export default function HospitalClientComponent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState<HospitalDetail | null>(null);
   const [activeMarker, setActiveMarker] = useState<Hospital | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
 
   // 위치 업데이트 핸들러
   const updatePosition = (position: GeolocationPosition) => {
@@ -133,29 +138,25 @@ export default function HospitalClientComponent() {
     fetchData();
   }, [currentPosition, searchParams]);
 
-  // 병원 상세 정보 요청 함수
-  const handleHospitalClick = async (h: Hospital) => {
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://uhdiapa.com:8080";
-      const queryParams = new URLSearchParams({
-        'hospital-id': h.hospital_id.toString(),
-        latitude: h.location.latitude.toString(),
-        longitude: h.location.longitude.toString(),
-      });
-      const res = await fetch(`${API_URL}/hospitals/details?${queryParams.toString()}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!res.ok) throw new Error(`상세정보 호출 실패 ${res.status}`);
-      const json = await res.json();
-      console.log("백엔드 응답 (병원 상세):", json);
-      setSelectedHospitalDetail(json.data);
-      setIsModalOpen(true);
-    } catch (err) {
-      console.error("상세정보 로드 오류:", err);
+  // 병원 선택 핸들러 수정 - context 사용
+  const handleHospitalClick = (hospital: Hospital) => {
+    if (!currentPosition) {
+      console.error("현재 위치 정보가 없습니다.");
+      return;
     }
+    
+    setIsLoading(true); // 로딩 표시 시작
+
+    // router.push 사용하여 softly 네비게이션 - API 재로드 방지
+    const params = new URLSearchParams({
+      currentLat: currentPosition.lat.toString(),
+      currentLng: currentPosition.lng.toString(),
+      destLat: hospital.location.latitude.toString(),
+      destLng: hospital.location.longitude.toString(),
+      destName: hospital.name,
+    });
+    
+    router.push(`/directions?${params.toString()}`);
   };
 
   // 경로 안내 페이지로 이동하는 함수
@@ -178,34 +179,39 @@ export default function HospitalClientComponent() {
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
+      {/* 로딩 인디케이터 */}
+      {isLoading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div className="text-xl font-semibold">경로를 불러오는 중입니다...</div>
+        </div>
+      )}
+      
       {/* 지도 영역 */}
       <div className="absolute inset-0 z-0">
-        <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_FALLBACK_GOOGLE_MAPS_KEY"}>
-          {currentPosition ? (
-            <GoogleMap
-              mapContainerStyle={containerStyle}
-              center={currentPosition}
-              zoom={15}
-              onLoad={(map) => { mapRef.current = map; }}
-              onClick={() => setActiveMarker(null)}
-            >
-              {currentPosition && <MarkerF position={currentPosition} />}
-              {hospitals.map((hospital) => (
-                <MarkerF
-                  key={hospital.hospital_id}
-                  position={{ lat: hospital.location.latitude, lng: hospital.location.longitude }}
-                  onClick={() => {
-                    handleHospitalClick(hospital);
-                  }}
-                />
-              ))}
-            </GoogleMap>
-          ) : (
-            <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-500">
-              위치 정보를 불러오는 중...
-            </div>
-          )}
-        </LoadScript>
+        {isLoaded && currentPosition ? (
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={currentPosition}
+            zoom={15}
+            onLoad={(map) => { mapRef.current = map; }}
+            onClick={() => setActiveMarker(null)}
+          >
+            {currentPosition && <MarkerF position={currentPosition} />}
+            {hospitals.map((hospital) => (
+              <MarkerF
+                key={hospital.hospital_id}
+                position={{ lat: hospital.location.latitude, lng: hospital.location.longitude }}
+                onClick={() => {
+                  handleHospitalClick(hospital);
+                }}
+              />
+            ))}
+          </GoogleMap>
+        ) : (
+          <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-500">
+            {loadError ? `지도 로딩 오류: ${loadError.message}` : "위치 정보를 불러오는 중..."}
+          </div>
+        )}
       </div>
 
       {/* 상단 아코디언 */}
