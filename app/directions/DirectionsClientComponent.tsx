@@ -5,7 +5,7 @@
 /* eslint-disable prettier/prettier */
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
@@ -49,12 +49,52 @@ export default function DirectionsClientComponent() {
 
   const [mapCenter, setMapCenter] = useState<LocationPoint | undefined>(undefined);
 
-  // 항상 대중교통 모드만 사용
-  const travelMode = "TRANSIT";
-  const currentTravelMode = isLoaded ? google.maps.TravelMode.TRANSIT : "TRANSIT";
-
   const directionsCallback = useRef<((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => void) | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+
+  const mapOptions = useMemo(() => ({
+    gestureHandling: 'greedy', 
+    disableDefaultUI: true, 
+    zoomControl: true,
+    styles: [
+      { featureType: "transit", elementType: "all", stylers: [{ visibility: "on" }] },
+      { featureType: "transit.station", elementType: "all", stylers: [{ visibility: "on" }] },
+    ]
+  }), []);
+
+  const directionsOptions = useMemo(() => {
+    if (!origin || !destination || !isLoaded) return null;
+    
+    return {
+      origin: origin,
+      destination: destination,
+      travelMode: isLoaded ? google.maps.TravelMode.TRANSIT : google.maps.TravelMode.TRANSIT,
+      provideRouteAlternatives: false,
+      unitSystem: google.maps.UnitSystem.METRIC,
+      transitOptions: {
+        departureTime: new Date(),
+      }
+    };
+  }, [origin, destination, isLoaded]);
+
+  const rendererOptions = useMemo(() => ({
+    directions: directionsResponse,
+    suppressMarkers: false,
+    polylineOptions: {
+      strokeColor: '#0F9D58',
+      strokeOpacity: 0.8,
+      strokeWeight: 5
+    }
+  }), [directionsResponse]);
+
+  const stopMarkerIcon = useMemo(() => ({
+    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+    scaledSize: isLoaded ? new google.maps.Size(25, 25) : undefined
+  }), [isLoaded]);
+
+  const onMapLoad = useCallback((map) => {
+    mapRef.current = map;
+  }, []);
 
   useEffect(() => {
     const currentLat = parseFloat(searchParams.get('currentLat') || '');
@@ -78,12 +118,10 @@ export default function DirectionsClientComponent() {
     setTransitStops([]);
   }, [searchParams]);
 
-  // 대중교통 정류장 정보 추출
   useEffect(() => {
     if (directionsResponse) {
       const stops: TransitStop[] = [];
 
-      // 경로의 각 구간에서 대중교통 정보 추출
       if (directionsResponse.routes && directionsResponse.routes.length > 0) {
         const route = directionsResponse.routes[0];
         if (route.legs && route.legs.length > 0) {
@@ -91,7 +129,6 @@ export default function DirectionsClientComponent() {
             if (leg.steps) {
               leg.steps.forEach(step => {
                 if (step.travel_mode === google.maps.TravelMode.TRANSIT && step.transit) {
-                  // 출발 정류장 정보
                   if (step.transit.departure_stop) {
                     stops.push({
                       position: {
@@ -104,7 +141,6 @@ export default function DirectionsClientComponent() {
                     });
                   }
                   
-                  // 도착 정류장 정보
                   if (step.transit.arrival_stop) {
                     stops.push({
                       position: {
@@ -128,7 +164,6 @@ export default function DirectionsClientComponent() {
     }
   }, [directionsResponse]);
 
-  // 경로 정보 추출
   useEffect(() => {
     if (directionsResponse) {
       if (directionsResponse.routes && directionsResponse.routes.length > 0) {
@@ -136,12 +171,10 @@ export default function DirectionsClientComponent() {
         if (route.legs && route.legs.length > 0) {
           const leg = route.legs[0];
           
-          // 거리 및 시간 정보 설정
           const distance = leg.distance?.text || '';
           const duration = leg.duration?.text || '';
           setRouteInfo({ distance, duration });
           
-          // 지도 범위 조정
           if (mapRef.current && route.bounds) {
             mapRef.current.fitBounds(route.bounds);
           }
@@ -150,7 +183,6 @@ export default function DirectionsClientComponent() {
     }
   }, [directionsResponse]);
 
-  // 경로 요청 콜백
   useEffect(() => {
     directionsCallback.current = (
       result: google.maps.DirectionsResult | null,
@@ -229,63 +261,31 @@ export default function DirectionsClientComponent() {
           mapContainerStyle={{ width: '100%', height: '100%' }}
           center={mapCenter}
           zoom={15}
-          options={{ 
-            gestureHandling: 'greedy', 
-            disableDefaultUI: true, 
-            zoomControl: true,
-            styles: [
-              { featureType: "transit", elementType: "all", stylers: [{ visibility: "on" }] },
-              { featureType: "transit.station", elementType: "all", stylers: [{ visibility: "on" }] },
-            ]
-          }}
-          onLoad={(map) => { mapRef.current = map; }}
+          options={mapOptions}
+          onLoad={onMapLoad}
         >
-          {/* DirectionsService - 경로 요청 */}
-          {origin && destination && !directionsResponse && directionsCallback.current && (
+          {directionsOptions && !directionsResponse && directionsCallback.current && (
             <DirectionsService
-              options={{
-                origin: origin,
-                destination: destination,
-                travelMode: isLoaded ? google.maps.TravelMode.TRANSIT : google.maps.TravelMode.TRANSIT,
-                provideRouteAlternatives: false,
-                unitSystem: google.maps.UnitSystem.METRIC,
-                transitOptions: {
-                  departureTime: new Date(),
-                }
-              }}
+              options={directionsOptions}
               callback={directionsCallback.current}
             />
           )}
           
-          {/* DirectionsRenderer - 경로 렌더링 */}
           {directionsResponse && (
             <DirectionsRenderer
-              options={{
-                directions: directionsResponse,
-                suppressMarkers: false, // 출발지와 목적지 마커 표시
-                polylineOptions: {
-                  strokeColor: '#0F9D58', // 대중교통은 녹색
-                  strokeOpacity: 0.8,
-                  strokeWeight: 5
-                }
-              }}
+              options={rendererOptions}
             />
           )}
           
-          {/* 대중교통 정류장 마커 */}
           {transitStops.map((stop, index) => (
             <MarkerF
               key={`transit-stop-${index}`}
               position={stop.position}
-              icon={{
-                url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                scaledSize: new google.maps.Size(25, 25)
-              }}
+              icon={stopMarkerIcon}
               onClick={() => setSelectedStop(stop)}
             />
           ))}
           
-          {/* 선택된 정류장 정보 표시 */}
           {selectedStop && (
             <InfoWindow
               position={selectedStop.position}
