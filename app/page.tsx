@@ -15,16 +15,20 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/age'); // '/age' 경로로 리디렉션합니다.
+    setTimeout(() => {
+      router.push('/age'); // '/age' 경로로 리디렉션합니다.
+    }, 1000);
   }, [router]); // router 객체가 변경될 때만 useEffect를 다시 실행합니다. (일반적으로 한 번만 실행됨)
 
-  // 리디렉션이 발생하기 전까지 잠시 보여줄 내용 (선택 사항)
-  // 또는 null을 반환하여 아무것도 렌더링하지 않을 수 있습니다.
   return (
     <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-10">
       <div className="inline-block max-w-xl text-center justify-center">
         <p>Connecting to Uhdi-apa...</p>
-        <p><strong>The First Lookup For The First Aid</strong></p> {/* 리디렉션 중 메시지 */}
+        <p><strong>Your First Lookup for First Aid.</strong></p>
+        <br/>
+        <p>Uhdi-apa로 연결하는중...</p>
+        <p>응급처치? 어디아파!</p>
+        <p>Uhdi-apa가 가장 먼저 찾아드립니다!</p>
       </div>
     </section>
   );
