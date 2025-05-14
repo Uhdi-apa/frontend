@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow, Circle } from '@react-google-maps/api';
+import { GoogleMap, DirectionsService, DirectionsRenderer, InfoWindow, Circle } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
 import { useGoogleMaps } from '../contexts/GoogleMapsContext';
 
@@ -42,8 +42,7 @@ export default function DirectionsClientComponent() {
   const [googleInitialized, setGoogleInitialized] = useState(false);
 
   const [currentPosition, setCurrentPosition] = useState<LocationPoint | null>(null);
-  const [locationAccuracy, setLocationAccuracy] = useState<number>(0);
-  const [trackingEnabled, setTrackingEnabled] = useState<boolean>(true);
+  const locationAccuracy = 10;
   const watchPositionId = useRef<number | null>(null);
 
   const directionsCallback = useRef<((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => void) | null>(null);
@@ -68,9 +67,8 @@ export default function DirectionsClientComponent() {
         };
 
         setCurrentPosition(newPosition);
-        setLocationAccuracy(position.coords.accuracy);
 
-        if (trackingEnabled && mapRef.current) {
+        if (mapRef.current) {
           mapRef.current.panTo(newPosition);
         }
       },
@@ -80,29 +78,11 @@ export default function DirectionsClientComponent() {
       },
       {
         enableHighAccuracy: true,
-        maximumAge: 15000,
+        maximumAge: 5000,
         timeout: 10000
       }
     );
-
-    setTrackingEnabled(true);
-  }, [trackingEnabled]);
-
-  const stopLocationTracking = useCallback(() => {
-    if (watchPositionId.current !== null) {
-      navigator.geolocation.clearWatch(watchPositionId.current);
-      watchPositionId.current = null;
-    }
-    setTrackingEnabled(false);
   }, []);
-
-  const toggleLocationTracking = useCallback(() => {
-    if (trackingEnabled) {
-      stopLocationTracking();
-    } else {
-      startLocationTracking();
-    }
-  }, [trackingEnabled, startLocationTracking, stopLocationTracking]);
 
   const mapOptions = useMemo(() => ({
     gestureHandling: 'greedy',
@@ -148,14 +128,23 @@ export default function DirectionsClientComponent() {
     };
   }, [isLoaded, googleMaps]);
 
-  const currentPositionIcon = useMemo(() => {
-    if (!isLoaded || !googleMaps) return { url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' };
+  const userLocationCircleOptions = useMemo(() => ({
+    fillColor: '#1E90FF',
+    fillOpacity: 0.6,
+    strokeColor: '#FFFFFF',
+    strokeOpacity: 1,
+    strokeWeight: 2,
+    zIndex: 1000,
+  }), []);
 
-    return {
-      url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-      scaledSize: new googleMaps.Size(30, 30)
-    };
-  }, [isLoaded, googleMaps]);
+  const accuracyCircleOptions = useMemo(() => ({
+    fillColor: '#4285F4',
+    fillOpacity: 0.15,
+    strokeColor: '#4285F4',
+    strokeOpacity: 0.5,
+    strokeWeight: 1,
+    zIndex: 3,
+  }), []);
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -169,7 +158,7 @@ export default function DirectionsClientComponent() {
   const handleCenterToCurrentLocation = useCallback(() => {
     if (mapRef.current && currentPosition) {
       mapRef.current.panTo(currentPosition);
-      mapRef.current.setZoom(16);
+      mapRef.current.setZoom(18);
     }
   }, [currentPosition]);
 
@@ -233,69 +222,6 @@ export default function DirectionsClientComponent() {
     };
   }, [isLoaded, googleMaps]);
 
-  useEffect(() => {
-    if (!directionsResponse || !isLoaded || !googleMaps) return;
-
-    const stops: TransitStop[] = [];
-
-    if (directionsResponse.routes && directionsResponse.routes.length > 0) {
-      const route = directionsResponse.routes[0];
-      if (route.legs && route.legs.length > 0) {
-        route.legs.forEach(leg => {
-          if (leg.steps) {
-            leg.steps.forEach(step => {
-              if (step.travel_mode === googleMaps.TravelMode.TRANSIT && step.transit) {
-                if (step.transit.departure_stop) {
-                  stops.push({
-                    position: {
-                      lat: step.transit.departure_stop.location.lat(),
-                      lng: step.transit.departure_stop.location.lng()
-                    },
-                    name: step.transit.departure_stop.name,
-                    isTransfer: false,
-                    transitLine: step.transit.line?.short_name || step.transit.line?.name
-                  });
-                }
-
-                if (step.transit.arrival_stop) {
-                  stops.push({
-                    position: {
-                      lat: step.transit.arrival_stop.location.lat(),
-                      lng: step.transit.arrival_stop.location.lng()
-                    },
-                    name: step.transit.arrival_stop.name,
-                    isTransfer: false
-                  });
-                }
-              }
-            });
-          }
-        });
-      }
-    }
-
-    setTransitStops(stops);
-  }, [directionsResponse, isLoaded, googleMaps]);
-
-  useEffect(() => {
-    if (!directionsResponse) return;
-
-    if (directionsResponse.routes && directionsResponse.routes.length > 0) {
-      const route = directionsResponse.routes[0];
-      if (route.legs && route.legs.length > 0) {
-        const leg = route.legs[0];
-
-        const distance = leg.distance?.text || '';
-        const duration = leg.duration?.text || '';
-        setRouteInfo({ distance, duration });
-
-        if (mapRef.current && route.bounds) {
-          mapRef.current.fitBounds(route.bounds);
-        }
-      }
-    }
-  }, [directionsResponse]);
-
   if (loadError) {
     return <div>Error loading maps: {loadError.message}</div>;
   }
@@ -351,15 +277,6 @@ export default function DirectionsClientComponent() {
           </Button>
           <Button
             size="sm"
-            variant={trackingEnabled ? "solid" : "bordered"}
-            color={trackingEnabled ? "success" : "default"}
-            onPress={toggleLocationTracking}
-            className="flex-grow-0"
-          >
-            {trackingEnabled ? "추적중" : "추적시작"}
-          </Button>
-          <Button
-            size="sm"
             variant="light"
             onPress={handleGoBack}
             className="ml-auto px-3 py-1.5"
@@ -393,34 +310,32 @@ export default function DirectionsClientComponent() {
 
           {googleInitialized && currentPosition && (
             <>
-              <MarkerF
-                position={currentPosition}
-                icon={currentPositionIcon}
-                zIndex={1000}
-                animation={googleMaps?.Animation.BOUNCE}
+              <Circle
+                center={currentPosition}
+                radius={6}
+                options={userLocationCircleOptions}
               />
-              {locationAccuracy > 0 && (
-                <Circle
-                  center={currentPosition}
-                  radius={locationAccuracy}
-                  options={{
-                    fillColor: '#4285F4',
-                    fillOpacity: 0.15,
-                    strokeColor: '#4285F4',
-                    strokeOpacity: 0.5,
-                    strokeWeight: 1,
-                    zIndex: 3,
-                  }}
-                />
-              )}
+              <Circle
+                center={currentPosition}
+                radius={locationAccuracy}
+                options={accuracyCircleOptions}
+              />
             </>
           )}
 
           {googleInitialized && transitStops.map((stop, index) => (
-            <MarkerF
+            <Circle
               key={`transit-stop-${index}`}
-              position={stop.position}
-              icon={stopMarkerIcon}
+              center={stop.position}
+              radius={5}
+              options={{
+                fillColor: '#0F9D58',
+                fillOpacity: 0.7,
+                strokeColor: '#FFFFFF',
+                strokeOpacity: 1,
+                strokeWeight: 2,
+                zIndex: 500,
+              }}
               onClick={() => setSelectedStop(stop)}
             />
           ))}
