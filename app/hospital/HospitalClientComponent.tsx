@@ -3,11 +3,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GoogleMap, MarkerF } from "@react-google-maps/api"; // LoadScript 제거
+import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Button } from "@heroui/button";
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useGoogleMaps } from '../contexts/GoogleMapsContext'; // 컨텍스트 import
+import { useGoogleMaps } from '../contexts/GoogleMapsContext';
 
 // 지도 컨테이너 스타일
 const containerStyle = {
@@ -45,54 +45,60 @@ export default function HospitalClientComponent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  // Google Maps Context 사용
   const { isLoaded, loadError, googleMaps } = useGoogleMaps();
 
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [firstAidGuideline, setFirstAidGuideline] = useState<string>("");
   const [currentPosition, setCurrentPosition] = useState<google.maps.LatLngLiteral | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const watchIdRef = useRef<number | null>(null);
   const [symptom, setSymptom] = useState<string>("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState<HospitalDetail | null>(null);
   const [activeMarker, setActiveMarker] = useState<Hospital | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // 데이터 요청 상태 추적을 위한 플래그
+  const hasRequestedData = useRef(false);
 
-  // 위치 업데이트 핸들러
+  // 위치 업데이트 핸들러 - 한 번만 호출되도록 수정
   const updatePosition = (position: GeolocationPosition) => {
     const pos = {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
     };
-    setCurrentPosition(pos);
-    mapRef.current?.panTo(pos);
+    
+    // 현재 위치가 없을 때만 위치 설정 (최초 1회)
+    if (!currentPosition) {
+      setCurrentPosition(pos);
+      mapRef.current?.panTo(pos);
+    }
   };
 
-  // 초기 위치 조회 및 watch
+  // 초기 위치 조회 - watchPosition 제거하고 getCurrentPosition만 사용
   useEffect(() => {
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(updatePosition);
-      watchIdRef.current = navigator.geolocation.watchPosition(
+      navigator.geolocation.getCurrentPosition(
         updatePosition,
-        (error) => console.error("Error watching position:", error),
+        (error) => console.error("Error getting position:", error),
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
     }
-
-    return () => {
-      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    };
+    
+    // watchPosition 제거했으므로 클린업 함수도 제거
   }, []);
 
-  // 병원 리스트 로드
+  // 병원 리스트 로드 - 한 번만 요청하도록 수정
   useEffect(() => {
-    if (!currentPosition) return;
+    // 이미 데이터를 요청했거나 위치 정보가 없으면 실행하지 않음
+    if (hasRequestedData.current || !currentPosition) return;
 
     const symptomTextFromQuery = searchParams.get("symptom") || "증상 정보 없음";
 
     const fetchData = async () => {
+      // 요청 시작 전에 플래그 설정
+      hasRequestedData.current = true;
+      
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://uhdiapa.com:8080";
 
@@ -110,6 +116,7 @@ export default function HospitalClientComponent() {
 
         if (!response.ok) {
           throw new Error(`서버 응답 오류: ${response.status}`);
+          // 에러 발생 시에도 플래그는 유지 (재시도하지 않음)
         }
 
         const result = await response.json();
@@ -133,21 +140,33 @@ export default function HospitalClientComponent() {
 
       } catch (err) {
         console.error("병원 목록 로드 오류:", err);
+        // 에러 발생 시에는 플래그를 리셋하여 재시도 가능하게 할 수도 있음
+        // hasRequestedData.current = false;
       }
     };
+    
     fetchData();
-  }, [currentPosition, searchParams]);
+  }, [currentPosition, searchParams]); // 의존성 배열은 유지 (검색 파라미터가 변경될 경우 다시 요청 가능)
 
-  // 병원 선택 핸들러 수정 - context 사용
+  // 수동 새로고침 함수 추가 (필요 시 사용)
+  const handleRefreshData = () => {
+    if (!currentPosition) return;
+    
+    // 플래그 초기화 및 데이터 재요청
+    hasRequestedData.current = false;
+    // useEffect가 다시 실행되도록 currentPosition을 살짝 변경
+    setCurrentPosition({...currentPosition});
+  };
+
+  // 병원 선택 핸들러
   const handleHospitalClick = (hospital: Hospital) => {
     if (!currentPosition) {
       console.error("현재 위치 정보가 없습니다.");
       return;
     }
     
-    setIsLoading(true); // 로딩 표시 시작
+    setIsLoading(true);
 
-    // router.push 사용하여 softly 네비게이션 - API 재로드 방지
     const params = new URLSearchParams({
       currentLat: currentPosition.lat.toString(),
       currentLng: currentPosition.lng.toString(),
@@ -162,6 +181,8 @@ export default function HospitalClientComponent() {
   // 경로 안내 페이지로 이동하는 함수
   const handleDirectionsClick = () => {
     if (currentPosition && selectedHospitalDetail) {
+      setIsLoading(true); // 로딩 표시 추가
+      
       const params = new URLSearchParams({
         currentLat: currentPosition.lat.toString(),
         currentLng: currentPosition.lng.toString(),
@@ -170,10 +191,9 @@ export default function HospitalClientComponent() {
         destName: selectedHospitalDetail.hospitalName,
       });
       router.push(`/directions?${params.toString()}`);
-      setIsModalOpen(false); // 모달 닫기
+      setIsModalOpen(false);
     } else {
       console.error("현재 위치 또는 병원 정보가 없습니다.");
-      // 사용자에게 알림을 표시할 수 있습니다.
     }
   };
 
@@ -287,9 +307,9 @@ export default function HospitalClientComponent() {
             <p><strong>거리:</strong> {selectedHospitalDetail.distance !== undefined ? selectedHospitalDetail.distance.toFixed(2) : 'N/A'}km</p>
             <p><strong>응급실 여부:</strong> {selectedHospitalDetail.isEmergencyRoom ? "O" : "X"}</p>
             <p><strong>전문 진료과:</strong> {selectedHospitalDetail.specialties?.join(", ") || "정보 없음"}</p>
-            <div className="mt-6 flex justify-between"> {/* 버튼 정렬 변경 */}
+            <div className="mt-6 flex justify-between">
               <Button onPress={() => setIsModalOpen(false)} variant="bordered" className="mr-2">닫기</Button>
-              <Button onPress={handleDirectionsClick} color="primary">경로 안내</Button> {/* 경로 안내 버튼 추가 */}
+              <Button onPress={handleDirectionsClick} color="primary">경로 안내</Button>
             </div>
           </div>
         </div>
