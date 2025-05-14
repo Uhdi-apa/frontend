@@ -23,7 +23,8 @@ export default function Home() {
   return (
     <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-10">
       <div className="inline-block max-w-xl text-center justify-center">
-        <p>Redirecting to age page...</p> {/* 리디렉션 중 메시지 */}
+        <p>Connecting to Uhdi-apa...</p>
+        <p><strong>The First Lookup For The First Aid</strong></p> {/* 리디렉션 중 메시지 */}
       </div>
     </section>
   );
