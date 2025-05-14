@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, DirectionsService, DirectionsRenderer, MarkerF, InfoWindow, Circle } from '@react-google-maps/api';
 import { Button } from '@heroui/button';
 import { useGoogleMaps } from '../contexts/GoogleMapsContext';
 
@@ -41,9 +41,68 @@ export default function DirectionsClientComponent() {
   const [mapCenter, setMapCenter] = useState<LocationPoint | undefined>(undefined);
   const [googleInitialized, setGoogleInitialized] = useState(false);
 
+  const [currentPosition, setCurrentPosition] = useState<LocationPoint | null>(null);
+  const [locationAccuracy, setLocationAccuracy] = useState<number>(0);
+  const [trackingEnabled, setTrackingEnabled] = useState<boolean>(true);
+  const watchPositionId = useRef<number | null>(null);
+
   const directionsCallback = useRef<((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => void) | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const directionsRequestSent = useRef(false);
+
+  const startLocationTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      console.error("이 브라우저에서는 위치 추적을 지원하지 않습니다.");
+      return;
+    }
+
+    if (watchPositionId.current !== null) {
+      navigator.geolocation.clearWatch(watchPositionId.current);
+    }
+
+    watchPositionId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const newPosition = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+
+        setCurrentPosition(newPosition);
+        setLocationAccuracy(position.coords.accuracy);
+
+        if (trackingEnabled && mapRef.current) {
+          mapRef.current.panTo(newPosition);
+        }
+      },
+      (error) => {
+        console.error("위치 추적 오류:", error);
+        alert(`위치 정보를 가져오지 못했습니다: ${error.message}`);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 15000,
+        timeout: 10000
+      }
+    );
+
+    setTrackingEnabled(true);
+  }, [trackingEnabled]);
+
+  const stopLocationTracking = useCallback(() => {
+    if (watchPositionId.current !== null) {
+      navigator.geolocation.clearWatch(watchPositionId.current);
+      watchPositionId.current = null;
+    }
+    setTrackingEnabled(false);
+  }, []);
+
+  const toggleLocationTracking = useCallback(() => {
+    if (trackingEnabled) {
+      stopLocationTracking();
+    } else {
+      startLocationTracking();
+    }
+  }, [trackingEnabled, startLocationTracking, stopLocationTracking]);
 
   const mapOptions = useMemo(() => ({
     gestureHandling: 'greedy',
@@ -89,6 +148,15 @@ export default function DirectionsClientComponent() {
     };
   }, [isLoaded, googleMaps]);
 
+  const currentPositionIcon = useMemo(() => {
+    if (!isLoaded || !googleMaps) return { url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' };
+
+    return {
+      url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+      scaledSize: new googleMaps.Size(30, 30)
+    };
+  }, [isLoaded, googleMaps]);
+
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     setGoogleInitialized(true);
@@ -98,6 +166,13 @@ export default function DirectionsClientComponent() {
     router.back();
   }, [router]);
 
+  const handleCenterToCurrentLocation = useCallback(() => {
+    if (mapRef.current && currentPosition) {
+      mapRef.current.panTo(currentPosition);
+      mapRef.current.setZoom(16);
+    }
+  }, [currentPosition]);
+
   useEffect(() => {
     const currentLat = parseFloat(searchParams.get('currentLat') || '');
     const currentLng = parseFloat(searchParams.get('currentLng') || '');
@@ -106,8 +181,10 @@ export default function DirectionsClientComponent() {
     const destNameParam = searchParams.get('destName') || '목적지';
 
     if (!isNaN(currentLat) && !isNaN(currentLng)) {
-      setOrigin({ lat: currentLat, lng: currentLng });
-      setMapCenter({ lat: currentLat, lng: currentLng });
+      const initialOrigin = { lat: currentLat, lng: currentLng };
+      setOrigin(initialOrigin);
+      setMapCenter(initialOrigin);
+      setCurrentPosition(initialOrigin);
     }
     if (!isNaN(destLat) && !isNaN(destLng)) {
       setDestination({ lat: destLat, lng: destLng });
@@ -120,6 +197,41 @@ export default function DirectionsClientComponent() {
     directionsRequestSent.current = false;
 
   }, [searchParams]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      startLocationTracking();
+    }
+
+    return () => {
+      if (watchPositionId.current !== null) {
+        navigator.geolocation.clearWatch(watchPositionId.current);
+      }
+    };
+  }, [isLoaded, startLocationTracking]);
+
+  useEffect(() => {
+    if (!isLoaded || !googleMaps) return;
+
+    directionsCallback.current = (
+      result: google.maps.DirectionsResult | null,
+      status: google.maps.DirectionsStatus
+    ) => {
+      console.log(`Directions Request Status: ${status}`);
+
+      if (status === googleMaps.DirectionsStatus.OK && result) {
+        console.log('Directions Response:', result);
+        setDirectionsResponse(result);
+        directionsRequestSent.current = true;
+      } else {
+        console.error(`Directions request failed. Status: ${status}`);
+        alert(`경로를 찾을 수 없습니다. ${status}`);
+        setDirectionsResponse(null);
+        setRouteInfo(null);
+        directionsRequestSent.current = true;
+      }
+    };
+  }, [isLoaded, googleMaps]);
 
   useEffect(() => {
     if (!directionsResponse || !isLoaded || !googleMaps) return;
@@ -184,29 +296,6 @@ export default function DirectionsClientComponent() {
     }
   }, [directionsResponse]);
 
-  useEffect(() => {
-    if (!isLoaded || !googleMaps) return;
-
-    directionsCallback.current = (
-      result: google.maps.DirectionsResult | null,
-      status: google.maps.DirectionsStatus
-    ) => {
-      console.log(`Directions Request Status: ${status}`);
-
-      if (status === googleMaps.DirectionsStatus.OK && result) {
-        console.log('Directions Response:', result);
-        setDirectionsResponse(result);
-        directionsRequestSent.current = true;
-      } else {
-        console.error(`Directions request failed. Status: ${status}`);
-        alert(`경로를 찾을 수 없습니다. ${status}`);
-        setDirectionsResponse(null);
-        setRouteInfo(null);
-        directionsRequestSent.current = true;
-      }
-    };
-  }, [isLoaded, googleMaps]);
-
   if (loadError) {
     return <div>Error loading maps: {loadError.message}</div>;
   }
@@ -226,7 +315,7 @@ export default function DirectionsClientComponent() {
       <div className="absolute top-0 left-0 right-0 h-auto min-h-[120px] bg-white p-3 shadow-lg z-10 flex flex-col justify-between">
         <div>
           <p className="text-sm font-medium truncate">
-            <strong>출발지:</strong> 현재 위치 ({origin ? `${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : '로딩 중...'})
+            <strong>출발지:</strong> 현재 위치 ({currentPosition ? `${currentPosition.lat.toFixed(4)}, ${currentPosition.lng.toFixed(4)}` : '로딩 중...'})
           </p>
           <p className="text-sm font-medium mt-1 truncate">
             <strong>목적지:</strong> {destinationName} ({destination ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}` : '로딩 중...'})
@@ -249,6 +338,25 @@ export default function DirectionsClientComponent() {
             disabled
           >
             대중교통
+          </Button>
+          <Button
+            size="sm"
+            variant="bordered"
+            color="primary"
+            onPress={handleCenterToCurrentLocation}
+            className="flex-grow-0"
+            isDisabled={!currentPosition}
+          >
+            현위치
+          </Button>
+          <Button
+            size="sm"
+            variant={trackingEnabled ? "solid" : "bordered"}
+            color={trackingEnabled ? "success" : "default"}
+            onPress={toggleLocationTracking}
+            className="flex-grow-0"
+          >
+            {trackingEnabled ? "추적중" : "추적시작"}
           </Button>
           <Button
             size="sm"
@@ -281,6 +389,31 @@ export default function DirectionsClientComponent() {
             <DirectionsRenderer
               options={rendererOptions}
             />
+          )}
+
+          {googleInitialized && currentPosition && (
+            <>
+              <MarkerF
+                position={currentPosition}
+                icon={currentPositionIcon}
+                zIndex={1000}
+                animation={googleMaps?.Animation.BOUNCE}
+              />
+              {locationAccuracy > 0 && (
+                <Circle
+                  center={currentPosition}
+                  radius={locationAccuracy}
+                  options={{
+                    fillColor: '#4285F4',
+                    fillOpacity: 0.15,
+                    strokeColor: '#4285F4',
+                    strokeOpacity: 0.5,
+                    strokeWeight: 1,
+                    zIndex: 3,
+                  }}
+                />
+              )}
+            </>
           )}
 
           {googleInitialized && transitStops.map((stop, index) => (
