@@ -1,11 +1,9 @@
 import "@/styles/globals.css";
-import {Metadata, Viewport} from "next";
-import {Roboto} from "next/font/google";
+import { Metadata, Viewport } from "next";
+import { Roboto } from "next/font/google";
 
-import {Providers} from "./providers";
+import { Providers } from "./providers";
 import { GoogleMapsProvider } from './contexts/GoogleMapsContext';
-
-import {siteConfig} from "@/config/site";
 
 // Roboto 폰트 사용
 const roboto = Roboto({
@@ -16,13 +14,10 @@ const roboto = Roboto({
 
 export const metadata: Metadata = {
     title: {
-        default: siteConfig.name,
-        template: `%s - ${siteConfig.name}`,
+        template: '%s | Uhdi-apa',
+        default: 'Uhdi-apa - First Aid Finder',
     },
-    description: siteConfig.description,
-    icons: {
-        icon: "/favicon.ico",
-    },
+    description: 'Find medical help quickly based on your symptoms',
 };
 
 export const viewport: Viewport = {
@@ -31,26 +26,26 @@ export const viewport: Viewport = {
     maximumScale: 1,
     userScalable: false,
     themeColor: [
-        {media: "(prefers-color-scheme: light)", color: "white"},
-        {media: "(prefers-color-scheme: dark)", color: "black"},
+        { media: "(prefers-color-scheme: light)", color: "white" },
+        { media: "(prefers-color-scheme: dark)", color: "black" },
     ],
 };
 
 export default function RootLayout({
-                                       children,
-                                   }: {
+    children,
+}: {
     children: React.ReactNode;
 }) {
     return (
-        <html lang="ko">
-        <body className={`h-screen bg-background ${roboto.className}`}>
-        <GoogleMapsProvider>
-            <Providers>
-                {/* 양쪽 모두 28px 마진 적용 */}
-                <div className="mx-7">{children}</div>
-            </Providers>
-        </GoogleMapsProvider>
-        </body>
+        <html lang="en">
+            <body className={`h-screen bg-background ${roboto.className}`}>
+                <GoogleMapsProvider>
+                    <Providers>
+                        {/* 양쪽 모두 28px 마진 적용 */}
+                        <div className="mx-7">{children}</div>
+                    </Providers>
+                </GoogleMapsProvider>
+            </body>
         </html>
     );
 }
