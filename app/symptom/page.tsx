@@ -13,12 +13,12 @@ export default function Symptom() {
   const [isLocationLoading, setIsLocationLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // 증상 입력값 검증 및 버튼 활성화 상태 관리
+  // Validate symptom input and manage button activation state
   useEffect(() => {
     setIsValid(!!symptom.trim());
   }, [symptom]);
 
-  // 컴포넌트 마운트 시 현재 위치 정보 가져오기
+  // Get current location information when component mounts
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -31,32 +31,32 @@ export default function Symptom() {
           setIsLocationLoading(false);
         },
         (error) => {
-          console.error("위치 정보 가져오기 오류:", error);
-          setLocationError("위치 정보를 가져올 수 없습니다. 기본값(0,0)으로 증상을 검색합니다.");
+          console.error("Error getting location information:", error);
+          setLocationError("Unable to retrieve location information. Symptoms will be searched with default value (0,0).");
           setCurrentPosition({ latitude: 0, longitude: 0 });
           setIsLocationLoading(false);
         }
       );
     } else {
-      setLocationError("브라우저에서 위치 정보 기능을 지원하지 않습니다. 기본값(0,0)으로 증상을 검색합니다.");
+      setLocationError("Your browser doesn't support location services. Symptoms will be searched with default value (0,0).");
       setCurrentPosition({ latitude: 0, longitude: 0 });
       setIsLocationLoading(false);
     }
   }, []);
 
-  // 다음 페이지로 이동하는 함수
+  // Function to navigate to next page
   const handleNextClick = async () => {
     if (!isValid || isLocationLoading || !currentPosition) {
       if (isLocationLoading) {
-        alert("위치 정보를 가져오는 중입니다. 잠시 후 다시 시도해주세요.");
+        alert("Location information is being retrieved. Please try again later.");
       } else if (!currentPosition) {
-        alert("위치 정보가 설정되지 않았습니다. 페이지를 새로고침하거나 잠시 후 다시 시도해주세요.");
+        alert("Location information is not set. Please refresh the page or try again later.");
       }
       return;
     }
 
     try {
-      // 서버 통신 로직 제거
+      // Server communication logic removed
       // const API_URL = "http://43.200.107.7:8080";
 
       // const response = await fetch(`${API_URL}/hospitals/recommend/by-symptoms`, {
@@ -72,31 +72,31 @@ export default function Symptom() {
       // });
 
       // if (!response.ok) {
-      //   throw new Error(`서버 응답 오류: ${response.status}`);
+      //   throw new Error(`Server response error: ${response.status}`);
       // }
 
       // const result = await response.json();
 
-      // console.log("백엔드 응답:", result);
+      // console.log("Backend response:", result);
 
-      // 증상 정보를 hospital 페이지로 전달
+      // Pass symptom information to hospital page
       router.push(`/hospital?symptom=${encodeURIComponent(symptom.trim())}`);
     } catch (error) {
-      // 에러 처리 로직은 유지 (예: 라우팅 실패 등 예상치 못한 오류)
-      console.error("페이지 이동 실패:", error);
-      alert(`페이지 이동에 실패했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
+      // Error handling logic is maintained (e.g., routing failures or unexpected errors)
+      console.error("Failed to navigate to page:", error);
+      alert(`Failed to navigate to the page: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
   return (
     <>
       <div className="pt-32">
-        <p className="flex font-bold text-2xl">증상을 기입해주세요.</p>
+        <p className="flex font-bold text-2xl">Please describe your symptoms.</p>
         <p className="flex font-normal text-sm pt-2">
-          어떤 증상으로 아프고 어떤 과의 전문적 도움이 필요한 지 작성하면 AI가 문제를 더욱 쉽게 파악할 수 있어요.
+          Describing your symptoms and what kind of specialist help you need will help AI better understand your issue.
         </p>
         {isLocationLoading && (
-          <p className="text-sm text-gray-500 pt-2">위치 정보를 가져오는 중...</p>
+          <p className="text-sm text-gray-500 pt-2">Getting your location...</p>
         )}
         {locationError && !isLocationLoading && (
           <p className="text-sm text-red-500 pt-2">{locationError}</p>
@@ -107,7 +107,7 @@ export default function Symptom() {
           <div className="flex w-full">
             <Textarea
               isRequired
-              placeholder="증상을 입력해주세요."
+              placeholder="Enter your symptoms."
               variant="bordered"
               className="w-full"
               value={symptom}
@@ -123,7 +123,7 @@ export default function Symptom() {
           onPress={handleNextClick}
           isDisabled={!isValid || isLocationLoading}
         >
-          다음
+          Next
         </Button>
       </div>
     </>
