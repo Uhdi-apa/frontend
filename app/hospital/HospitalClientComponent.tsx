@@ -1,5 +1,3 @@
-// filepath: c:\Users\YUP\Desktop\Solution_Challenge_2025\frontend\app\hospital\HospitalClientComponent.tsx
-/* eslint-disable prettier/prettier */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -9,13 +7,13 @@ import { Button } from "@heroui/button";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useGoogleMaps } from '../contexts/GoogleMapsContext';
 
-// 지도 컨테이너 스타일
+// Map container style
 const containerStyle = {
   width: "100%",
   height: "100%",
 };
 
-// 하단 리스트용 병원 타입
+// Hospital type for bottom list
 interface Hospital {
   hospital_id: number;
   name: string;
@@ -26,7 +24,7 @@ interface Hospital {
   is_emergency: boolean;
 }
 
-// 모달에 표시할 병원 상세 정보 타입
+// Hospital detail type for modal display
 interface HospitalDetail {
   hospitalId: number;
   hospitalName: string;
@@ -58,24 +56,24 @@ export default function HospitalClientComponent() {
   const [activeMarker, setActiveMarker] = useState<Hospital | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 데이터 요청 상태 추적을 위한 플래그
+  // Flag to track data request status
   const hasRequestedData = useRef(false);
 
-  // 위치 업데이트 핸들러 - 한 번만 호출되도록 수정
+  // Position update handler - modified to call only once
   const updatePosition = (position: GeolocationPosition) => {
     const pos = {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
     };
     
-    // 현재 위치가 없을 때만 위치 설정 (최초 1회)
+    // Set position only if current position is null (first time)
     if (!currentPosition) {
       setCurrentPosition(pos);
       mapRef.current?.panTo(pos);
     }
   };
 
-  // 초기 위치 조회 - watchPosition 제거하고 getCurrentPosition만 사용
+  // Initial position check - removed watchPosition and using getCurrentPosition only
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -85,18 +83,18 @@ export default function HospitalClientComponent() {
       );
     }
     
-    // watchPosition 제거했으므로 클린업 함수도 제거
+    // No cleanup function needed as watchPosition was removed
   }, []);
 
-  // 병원 리스트 로드 - 한 번만 요청하도록 수정
+  // Load hospital list - modified to request only once
   useEffect(() => {
-    // 이미 데이터를 요청했거나 위치 정보가 없으면 실행하지 않음
+    // Don't execute if data already requested or position not available
     if (hasRequestedData.current || !currentPosition) return;
 
-    const symptomTextFromQuery = searchParams.get("symptom") || "증상 정보 없음";
+    const symptomTextFromQuery = searchParams.get("symptom") || "No symptom information";
 
     const fetchData = async () => {
-      // 요청 시작 전에 플래그 설정
+      // Set flag before starting request
       hasRequestedData.current = true;
       
       try {
@@ -115,12 +113,12 @@ export default function HospitalClientComponent() {
         });
 
         if (!response.ok) {
-          throw new Error(`서버 응답 오류: ${response.status}`);
-          // 에러 발생 시에도 플래그는 유지 (재시도하지 않음)
+          throw new Error(`Server response error: ${response.status}`);
+          // Flag remains set even in case of error (no retry)
         }
 
         const result = await response.json();
-        console.log("백엔드 응답 (추천 병원):", result);
+        console.log("Backend response (recommended hospitals):", result);
 
         setSymptom(symptomTextFromQuery);
 
@@ -139,29 +137,29 @@ export default function HospitalClientComponent() {
         setFirstAidGuideline(result.data?.firstAidGuideLine || "");
 
       } catch (err) {
-        console.error("병원 목록 로드 오류:", err);
-        // 에러 발생 시에는 플래그를 리셋하여 재시도 가능하게 할 수도 있음
+        console.error("Error loading hospital list:", err);
+        // Reset flag to allow retry if needed
         // hasRequestedData.current = false;
       }
     };
     
     fetchData();
-  }, [currentPosition, searchParams]); // 의존성 배열은 유지 (검색 파라미터가 변경될 경우 다시 요청 가능)
+  }, [currentPosition, searchParams]); // Dependencies array maintained (allows new request if search params change)
 
-  // 수동 새로고침 함수 추가 (필요 시 사용)
+  // Added manual refresh function (use if needed)
   const handleRefreshData = () => {
     if (!currentPosition) return;
     
-    // 플래그 초기화 및 데이터 재요청
+    // Reset flag and request data again
     hasRequestedData.current = false;
-    // useEffect가 다시 실행되도록 currentPosition을 살짝 변경
+    // Slightly modify currentPosition to trigger useEffect
     setCurrentPosition({...currentPosition});
   };
 
-  // 병원 선택 핸들러
+  // Hospital selection handler
   const handleHospitalClick = (hospital: Hospital) => {
     if (!currentPosition) {
-      console.error("현재 위치 정보가 없습니다.");
+      console.error("Current location information not available.");
       return;
     }
     
@@ -178,10 +176,10 @@ export default function HospitalClientComponent() {
     router.push(`/directions?${params.toString()}`);
   };
 
-  // 경로 안내 페이지로 이동하는 함수
+  // Function to navigate to directions page
   const handleDirectionsClick = () => {
     if (currentPosition && selectedHospitalDetail) {
-      setIsLoading(true); // 로딩 표시 추가
+      setIsLoading(true); // Add loading indicator
       
       const params = new URLSearchParams({
         currentLat: currentPosition.lat.toString(),
@@ -193,20 +191,20 @@ export default function HospitalClientComponent() {
       router.push(`/directions?${params.toString()}`);
       setIsModalOpen(false);
     } else {
-      console.error("현재 위치 또는 병원 정보가 없습니다.");
+      console.error("Current location or hospital information not available.");
     }
   };
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden">
-      {/* 로딩 인디케이터 */}
+      {/* Loading indicator */}
       {isLoading && (
         <div className="fixed inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
-          <div className="text-xl font-semibold">경로를 불러오는 중입니다...</div>
+          <div className="text-xl font-semibold">Loading directions...</div>
         </div>
       )}
       
-      {/* 지도 영역 */}
+      {/* Map area */}
       <div className="absolute inset-0 z-0">
         {isLoaded && currentPosition ? (
           <GoogleMap
@@ -229,35 +227,35 @@ export default function HospitalClientComponent() {
           </GoogleMap>
         ) : (
           <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-500">
-            {loadError ? `지도 로딩 오류: ${loadError.message}` : "위치 정보를 불러오는 중..."}
+            {loadError ? `Map loading error: ${loadError.message}` : "Getting location information..."}
           </div>
         )}
       </div>
 
-      {/* 상단 아코디언 */}
+      {/* Top accordion */}
       <div className="w-full z-10 relative">
         <Accordion variant="shadow" className="bg-white rounded-b-2xl shadow-xl overflow-hidden">
           <AccordionItem
             key="defaultStatement"
             className="w-full pt-[100px]"
-            textValue="진단 정보"
+            textValue="Diagnosis Information"
             title={
               <div className="px-5 py-3 flex items-center justify-between pb-0">
-                <span className="font-bold text-2xl">{symptom || "증상 분석 중..."}</span>
+                <span className="font-bold text-2xl">{symptom || "Analyzing symptoms..."}</span>
               </div>
             }
           >
             <div className="pt-0 px-5 pb-3 font-normal text-sm whitespace-pre-line">
-              {firstAidGuideline || "응급 처치 가이드라인을 불러오는 중입니다..."}
+              {firstAidGuideline || "Loading first aid guidelines..."}
             </div>
           </AccordionItem>
         </Accordion>
       </div>
 
-      {/* 빈 공간 */}
+      {/* Empty space */}
       <div className="flex-grow" />
 
-      {/* 하단 스크롤 영역 */}
+      {/* Bottom scroll area */}
       <div className="relative h-[320px] bg-white rounded-t-2xl overflow-y-auto z-10">
         {hospitals.length > 0 ? hospitals.map((h) => (
           <div key={h.hospital_id} className="flex pt-6 items-center justify-center">
@@ -280,12 +278,12 @@ export default function HospitalClientComponent() {
           </div>
         )) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            주변 병원 정보를 불러오는 중이거나, 정보가 없습니다.
+            Loading nearby hospital information, or no information available.
           </div>
         )}
       </div>
 
-      {/* 모달 */}
+      {/* Modal */}
       {isModalOpen && selectedHospitalDetail && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
           <div className="bg-white rounded-2xl p-6 w-80 max-w-full shadow-lg">
@@ -298,18 +296,18 @@ export default function HospitalClientComponent() {
               />
             ) : (
               <div className="w-full h-40 bg-gray-200 rounded-md mb-4 flex items-center justify-center text-gray-500">
-                이미지 없음
+                No image
               </div>
             )}
-            <p><strong>주소:</strong> {selectedHospitalDetail.address}</p>
-            <p><strong>운영시간:</strong> {selectedHospitalDetail.operatingHours}</p>
-            <p><strong>전화번호:</strong> {selectedHospitalDetail.phoneNumber}</p>
-            <p><strong>거리:</strong> {selectedHospitalDetail.distance !== undefined ? selectedHospitalDetail.distance.toFixed(2) : 'N/A'}km</p>
-            <p><strong>응급실 여부:</strong> {selectedHospitalDetail.isEmergencyRoom ? "O" : "X"}</p>
-            <p><strong>전문 진료과:</strong> {selectedHospitalDetail.specialties?.join(", ") || "정보 없음"}</p>
+            <p><strong>Address:</strong> {selectedHospitalDetail.address}</p>
+            <p><strong>Hours:</strong> {selectedHospitalDetail.operatingHours}</p>
+            <p><strong>Phone:</strong> {selectedHospitalDetail.phoneNumber}</p>
+            <p><strong>Distance:</strong> {selectedHospitalDetail.distance !== undefined ? selectedHospitalDetail.distance.toFixed(2) : 'N/A'}km</p>
+            <p><strong>Emergency Room:</strong> {selectedHospitalDetail.isEmergencyRoom ? "Yes" : "No"}</p>
+            <p><strong>Specialties:</strong> {selectedHospitalDetail.specialties?.join(", ") || "No information"}</p>
             <div className="mt-6 flex justify-between">
-              <Button onPress={() => setIsModalOpen(false)} variant="bordered" className="mr-2">닫기</Button>
-              <Button onPress={handleDirectionsClick} color="primary">경로 안내</Button>
+              <Button onPress={() => setIsModalOpen(false)} variant="bordered" className="mr-2">Close</Button>
+              <Button onPress={handleDirectionsClick} color="primary">Get Directions</Button>
             </div>
           </div>
         </div>

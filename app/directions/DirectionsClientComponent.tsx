@@ -51,7 +51,7 @@ export default function DirectionsClientComponent() {
 
   const startLocationTracking = useCallback(() => {
     if (!navigator.geolocation) {
-      console.error("이 브라우저에서는 위치 추적을 지원하지 않습니다.");
+      console.error("This browser does not support location tracking.");
       return;
     }
 
@@ -73,8 +73,8 @@ export default function DirectionsClientComponent() {
         }
       },
       (error) => {
-        console.error("위치 추적 오류:", error);
-        alert(`위치 정보를 가져오지 못했습니다: ${error.message}`);
+        console.error("Location tracking error:", error);
+        alert(`Failed to retrieve location: ${error.message}`);
       },
       {
         enableHighAccuracy: true,
@@ -167,7 +167,7 @@ export default function DirectionsClientComponent() {
     const currentLng = parseFloat(searchParams.get('currentLng') || '');
     const destLat = parseFloat(searchParams.get('destLat') || '');
     const destLng = parseFloat(searchParams.get('destLng') || '');
-    const destNameParam = searchParams.get('destName') || '목적지';
+    const destNameParam = searchParams.get('destName') || 'Destination';
 
     if (!isNaN(currentLat) && !isNaN(currentLng)) {
       const initialOrigin = { lat: currentLat, lng: currentLng };
@@ -214,7 +214,7 @@ export default function DirectionsClientComponent() {
         directionsRequestSent.current = true;
       } else {
         console.error(`Directions request failed. Status: ${status}`);
-        alert(`경로를 찾을 수 없습니다. ${status}`);
+        alert(`Unable to find a route. ${status}`);
         setDirectionsResponse(null);
         setRouteInfo(null);
         directionsRequestSent.current = true;
@@ -230,7 +230,7 @@ export default function DirectionsClientComponent() {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-100">
         <div className="text-xl font-semibold text-gray-700">
-          지도를 불러오는 중입니다...
+          Loading map...
         </div>
       </div>
     );
@@ -241,16 +241,16 @@ export default function DirectionsClientComponent() {
       <div className="absolute top-0 left-0 right-0 h-auto min-h-[120px] bg-white p-3 shadow-lg z-10 flex flex-col justify-between">
         <div>
           <p className="text-sm font-medium truncate">
-            <strong>출발지:</strong> 현재 위치 ({currentPosition ? `${currentPosition.lat.toFixed(4)}, ${currentPosition.lng.toFixed(4)}` : '로딩 중...'})
+            <strong>Origin:</strong> Current Location ({currentPosition ? `${currentPosition.lat.toFixed(4)}, ${currentPosition.lng.toFixed(4)}` : 'Loading...'})
           </p>
           <p className="text-sm font-medium mt-1 truncate">
-            <strong>목적지:</strong> {destinationName} ({destination ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}` : '로딩 중...'})
+            <strong>Destination:</strong> {destinationName} ({destination ? `${destination.lat.toFixed(4)}, ${destination.lng.toFixed(4)}` : 'Loading...'})
           </p>
           {routeInfo && (
             <p className="text-sm font-medium mt-1">
-              <strong>예상:</strong> {routeInfo.duration}, {routeInfo.distance}
+              <strong>ETA:</strong> {routeInfo.duration}, {routeInfo.distance}
               {transitStops.length > 0 && (
-                <span> (대중교통 정류장 {transitStops.length}곳)</span>
+                <span> ({transitStops.length} transit stops)</span>
               )}
             </p>
           )}
@@ -263,7 +263,7 @@ export default function DirectionsClientComponent() {
             className="flex-grow md:flex-grow-0"
             disabled
           >
-            대중교통
+            Public Transit
           </Button>
           <Button
             size="sm"
@@ -273,7 +273,7 @@ export default function DirectionsClientComponent() {
             className="flex-grow-0"
             isDisabled={!currentPosition}
           >
-            현위치
+            Current Location
           </Button>
           <Button
             size="sm"
@@ -281,7 +281,7 @@ export default function DirectionsClientComponent() {
             onPress={handleGoBack}
             className="ml-auto px-3 py-1.5"
           >
-            뒤로
+            Back
           </Button>
         </div>
       </div>
@@ -348,7 +348,7 @@ export default function DirectionsClientComponent() {
               <div>
                 <p className="font-medium">{selectedStop.name}</p>
                 {selectedStop.transitLine && (
-                  <p className="text-sm">노선: {selectedStop.transitLine}</p>
+                  <p className="text-sm">Line: {selectedStop.transitLine}</p>
                 )}
               </div>
             </InfoWindow>
